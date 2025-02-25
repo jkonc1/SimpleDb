@@ -1,0 +1,27 @@
+#ifndef WINDOWS_NAMED_PIPE_H
+#define WINDOWS_NAMED_PIPE_H
+
+#include "io/ipc_socket.h"
+
+#include <asio.hpp>
+#include <windows.h> //fuj
+
+class WindowsNamedPipe : public IPCSocket {
+public:
+    WindowsNamedPipe(const std::string& path);
+    virtual std::unique_ptr<IPCConnection> accept() override;
+private:
+    std::string path;
+    asio::io_context io;
+};
+
+class WindowsNamedPipeConnection : public IPCConnection{
+public:
+    WindowsNamedPipeConnection(asio::windows::stream_handle stream);
+    virtual void send(const std::string& message) override;
+    virtual std::string receive() override;
+private:
+    asio::windows::stream_handle pipe;
+};
+
+#endif

@@ -5,23 +5,38 @@
 #include "io/asio_uds_socket.h"
 using SocketInterface = AsioUDSSocket;
 
+const std::string SOCKET_PATH = "/tmp/db_socket";
+
 #elif WINDOWS
 
-#include "io/windows_socket.h"
-using SocketInterface = WindowsSocket;
+#include "io/windows_named_pipe.h"
+using SocketInterface = WindowsNamedPipe;
+
+const std::string SOCKET_PATH = "\\\\.\\pipe\\db_pipe";
 
 #endif
 
-const std::string SOCKET_PATH = "/tmp/db_socket";
+#include <iostream>
+#include <chrono>
+#include <thread>
+
+constexpr int POLL_PERIOD_MS = 500;
 
 int main(){
+    //SocketInterface socket(SOCKET_PATH);
     std::unique_ptr<SocketInterface> socket = std::make_unique<SocketInterface>(SOCKET_PATH);
     
     while(true){
         auto connection = socket->accept();
+
+        while (connection == NULL) {
+            connection = socket->accept();
+            std::this_thread::sleep_for(std::chrono::milliseconds(POLL_PERIOD_MS));
+        }
         
         connection->send("Test");
         std::string response = connection->receive();
+        std::cout << "received " << response << std::endl;
         connection->send("Hello " + response);
     }
 }
