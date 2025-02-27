@@ -8,6 +8,8 @@ The engine will support IO through:
 - On Windows through Named Pipes
 - On Unix based systems, Unix Domain Sockets will be used
 
+These will be handled using the [asio](https://think-async.com/Asio/) library.
+
 ## SQL
 
 The engine will support a subset of SQL commands:
@@ -33,3 +35,4 @@ The engine will support the following data types:
 ## Storage
 
 The data will be stored in a text format resembling CSV. Each table will be stored in a separate file.
+
