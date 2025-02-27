@@ -1,3 +1,5 @@
+#ifdef UNIX
+
 #include "io/asio_uds_socket.h"
 #include <iostream>
 
@@ -41,4 +43,4 @@ std::string AsioUDSConnection::receive() {
     return std::string(asio::buffers_begin(buffer.data()), asio::buffers_begin(buffer.data()) + buffer.size());
 }
 
-
+#endif

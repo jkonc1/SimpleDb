@@ -1,3 +1,5 @@
+#ifdef WINDOWS
+
 #include "io/windows_named_pipe.h"
 
 #include <iostream>
@@ -50,3 +52,5 @@ std::string WindowsNamedPipeConnection::receive() {
     asio::read_until(pipe, buffer, '\n');
     return std::string(asio::buffers_begin(buffer.data()), asio::buffers_begin(buffer.data()) + buffer.size() -  2); //-2 to trim newline
 }
+
+#endif

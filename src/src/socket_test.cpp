@@ -23,8 +23,7 @@ const std::string SOCKET_PATH = "\\\\.\\pipe\\db_pipe";
 constexpr int POLL_PERIOD_MS = 500;
 
 int main(){
-    //SocketInterface socket(SOCKET_PATH);
-    std::unique_ptr<SocketInterface> socket = std::make_unique<SocketInterface>(SOCKET_PATH);
+    std::unique_ptr<IPCSocket> socket = std::make_unique<SocketInterface>(SOCKET_PATH);
     
     while(true){
         auto connection = socket->accept();
