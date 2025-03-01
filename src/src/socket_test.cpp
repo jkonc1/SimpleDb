@@ -1,4 +1,5 @@
 #include "io/ipc_socket.h"
+#include "jobs/job_queue.h"
 
 #ifdef UNIX
 
@@ -19,10 +20,22 @@ const std::string SOCKET_PATH = "\\\\.\\pipe\\db_pipe";
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <unistd.h>
 
 constexpr int POLL_PERIOD_MS = 500;
 
+void process_connection(std::unique_ptr<IPCConnection>&& connection){
+    connection->send("Test");
+    std::string response = connection->receive();
+    std::cout << "received " << response << std::endl;
+    connection->send("Hello " + response);
+    
+    sleep(10);
+}
+
 int main(){
+    JobQueue job_queue;
+    
     std::unique_ptr<IPCSocket> socket = std::make_unique<SocketInterface>(SOCKET_PATH);
     
     while(true){
@@ -33,9 +46,12 @@ int main(){
             std::this_thread::sleep_for(std::chrono::milliseconds(POLL_PERIOD_MS));
         }
         
-        connection->send("Test");
-        std::string response = connection->receive();
-        std::cout << "received " << response << std::endl;
-        connection->send("Hello " + response);
+        job_queue.add_job([connection = std::move(connection)]() mutable {
+            process_connection(std::move(connection));
+        });
+        break;
+        
     }
+    
+    job_queue.finish();
 }
