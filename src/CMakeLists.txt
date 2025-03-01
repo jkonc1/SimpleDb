@@ -11,7 +11,7 @@ else()
   message(FATAL_ERROR "Unsupported operating system.")
 endif()
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 
 include(FetchContent)
 FetchContent_Declare(

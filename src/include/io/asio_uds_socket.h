@@ -20,7 +20,7 @@ private:
 
 class AsioUDSConnection : public IPCConnection{
 public:
-    AsioUDSConnection(asio::local::stream_protocol::socket socket);
+    AsioUDSConnection(asio::local::stream_protocol::socket&& socket);
     void send(const std::string& message) override;
     std::string receive() override;
 private:

@@ -29,7 +29,7 @@ AsioUDSSocket::~AsioUDSSocket() {
     std::remove(path.c_str());
 }
 
-AsioUDSConnection::AsioUDSConnection(asio::local::stream_protocol::socket socket)
+AsioUDSConnection::AsioUDSConnection(asio::local::stream_protocol::socket&& socket)
         : socket(std::move(socket)) {
 }
 
