@@ -11,6 +11,12 @@ else()
   message(FATAL_ERROR "Unsupported operating system.")
 endif()
 
+if(MSVC)
+  add_compile_options(/W4 /WX)
+else()
+  add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+endif()
+
 set(CMAKE_CXX_STANDARD 23)
 
 include(FetchContent)
