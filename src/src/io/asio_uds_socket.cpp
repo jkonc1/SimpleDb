@@ -6,21 +6,29 @@
 AsioUDSSocket::AsioUDSSocket(const std::string& path) : path(path), io(), acceptor(io, asio::local::stream_protocol::endpoint(path)) {
 }
 
-std::unique_ptr<IPCConnection> AsioUDSSocket::accept(){
-    asio::local::stream_protocol::socket socket(io);
-    
-    try{
-        acceptor.accept(socket);
-    }
-    catch(const asio::system_error& e){
-        if(e.code() == asio::error::would_block){
-            return nullptr;
+void AsioUDSSocket::start_accepting(std::function<void(std::unique_ptr<IPCConnection>&&)> callback) {
+    acceptor.async_accept([this, callback](const asio::error_code& ec, asio::local::stream_protocol::socket socket){
+        if(!ec){
+            auto connection = std::make_unique<AsioUDSConnection>(std::move(socket));
+            callback(std::move(connection));
+        }
+        else{
+            std::cerr << "Error accepting connection: " << ec.message() << std::endl;
         }
         
-        throw;
-    }
+        start_accepting(callback);
+    });
+}
+
+void AsioUDSSocket::listen(std::function<void(std::unique_ptr<IPCConnection>&&)> callback){
+    start_accepting(callback);
     
-    return std::move(std::make_unique<AsioUDSConnection>(std::move(socket)));
+    io.run();
+}
+
+void AsioUDSSocket::stop(){
+    std::cout << "Stopping socket" << std::endl;
+    io.stop();
 }
 
 AsioUDSSocket::~AsioUDSSocket() {

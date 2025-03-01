@@ -1,4 +1,5 @@
 #include "io/ipc_socket.h"
+#include <cmath>
 
 #ifdef UNIX
 
@@ -19,23 +20,31 @@ const std::string SOCKET_PATH = "\\\\.\\pipe\\db_pipe";
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <csignal>
 
-constexpr int POLL_PERIOD_MS = 500;
+void callback(std::unique_ptr<IPCConnection>&& connection){
+    connection->send("Test");
+    std::string response = connection->receive();
+    std::cout << "received " << response << std::endl;
+    connection->send("Hello " + response);
+}
+
+std::function<void()> sigint_handler;
+
+void handle_sigint(int) {
+    sigint_handler();
+}
 
 int main(){
     std::unique_ptr<IPCSocket> socket = std::make_unique<SocketInterface>(SOCKET_PATH);
     
-    while(true){
-        auto connection = socket->accept();
-
-        while (connection == NULL) {
-            connection = socket->accept();
-            std::this_thread::sleep_for(std::chrono::milliseconds(POLL_PERIOD_MS));
-        }
-        
-        connection->send("Test");
-        std::string response = connection->receive();
-        std::cout << "received " << response << std::endl;
-        connection->send("Hello " + response);
-    }
+    sigint_handler = [&socket] {
+        socket->stop();
+    };
+    
+    ::signal(SIGINT, handle_sigint);
+    
+    socket->listen(callback);
+    
+    std::cout << "Exiting" << std::endl;
 }
