@@ -2,6 +2,9 @@
 #define TABLE_H
 
 #include <string>
+#include <vector>
+#include <memory>
+#include <shared_mutex>
 
 #include "db/cell.h"
 
@@ -23,14 +26,14 @@ private:
 class Table{
 public:
     Table(const std::vector<std::string>& column_names, const std::vector<Cell::DataType>& column_types);
+    Table(std::istream& is);
+    
+    void dump(std::ostream& os);
     
     void add_row(const std::vector<Cell>& data);
     
-    void dump(std::ostream& os);
-    static std::shared_ptr<Table> load(std::istream& is);
-    
     std::shared_ptr<Table> filter(const std::string& predicate);
-    static std::shared_ptr<Table> full_join(const shared_ptr<Table>& left, const std::shared_ptr<Table>& right);
+    static std::shared_ptr<Table> full_join(const std::shared_ptr<Table>& left, const std::shared_ptr<Table>& right);
 private:
     TableHeader header;
     std::vector<TableRow> rows;
