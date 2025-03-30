@@ -83,6 +83,7 @@ std::string Database::process_query(const std::string& query){
 }
 
 std::filesystem::path make_temp_dir() {
+    // TODO this is not ideal since we are potentially sharing the database to all users
     std::string random_filename = std::to_string(std::random_device()());
     
     return std::filesystem::temp_directory_path() / random_filename;
@@ -101,6 +102,9 @@ void Database::save() const {
         
         table->dump(file);
     }
+    
+    // let's just check it once again before deleting
+    check_directory(path);
     
     std::filesystem::remove_all(path);
     std::filesystem::rename(temp_dir, path);
