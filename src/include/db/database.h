@@ -28,6 +28,8 @@ private:
     static void unlock_directory(const std::filesystem::path& path);
     
 private:
+
+    std::string _process_query(const std::string& query);
     
     const std::filesystem::path path;
 

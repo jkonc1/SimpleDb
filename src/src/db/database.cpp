@@ -1,4 +1,5 @@
 #include "db/database.h"
+#include "db/table_serialization.h"
 
 #include <fstream>
 #include <mutex>
@@ -28,7 +29,7 @@ Database::Database(const std::filesystem::path& path) : path(path) {
         
         std::shared_ptr<Table> table;
         try{
-            table = std::make_shared<Table>(file);
+            table = std::make_shared<Table>(load_table(file));
         }catch(std::exception& e){
             throw std::runtime_error("Failed parse table " + filename.string() + " - " + std::string(e.what()));
         }
@@ -76,7 +77,7 @@ void Database::init_directory(const std::filesystem::path& path){
     }
 }
 
-std::string Database::process_query(const std::string& query){
+std::string Database::_process_query(const std::string& query){
     // TODO
     throw std::runtime_error("Not implemented");
     return query;
@@ -100,7 +101,7 @@ void Database::save() const {
     for(const auto& [table_name, table] : tables){
         std::ofstream file(temp_dir/table_name);
         
-        table->dump(file);
+        serialize_table(*table, file);
     }
     
     // let's just check it once again before deleting
@@ -128,4 +129,22 @@ void Database::remove_table(const std::string& table_name){
     }
     
     tables.erase(table_name);
+}
+
+std::string make_response(bool success, const std::string& message){
+    return std::string(success ? "OK" : "ERROR") + " " + message;
+}
+
+std::string Database::process_query(const std::string& query){
+    bool success = true;
+    std::string message;
+    try {
+        message = _process_query(query);
+    }
+    catch (const std::exception& e) {
+        success = false;
+        message = e.what();
+    }
+    
+    return make_response(success, message);
 }
