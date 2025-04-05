@@ -31,5 +31,12 @@ include_directories(include)
 include_directories(${asio_SOURCE_DIR}/asio/include)
 
 file(GLOB_RECURSE sources "src/*.cpp")
+list(FILTER sources EXCLUDE REGEX "src/main.cpp")
 
-add_executable(Dumbatase ${sources})
+file(GLOB_RECURSE test_sources "tests/**/*.cpp")
+
+include_directories(tests/include)
+
+add_executable(Dumbatase ${sources} src/main.cpp)
+
+add_executable(DumbataseTests ${sources} ${test_sources} tests/test_main.cpp)

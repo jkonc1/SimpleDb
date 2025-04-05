@@ -6,3 +6,7 @@ build
 Makefile
 .vscode
 .idea
+.cache
+compile_commands.json
+todo.md
+tmp

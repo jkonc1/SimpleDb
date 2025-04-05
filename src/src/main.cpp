@@ -1,6 +1,8 @@
 #include "io/ipc_socket.h"
 #include "jobs/job_queue.h"
 
+#include "db/database.h"
+
 #ifdef UNIX
 
 #include "io/asio_uds_socket.h"
@@ -24,6 +26,8 @@ const std::string SOCKET_PATH = "\\\\.\\pipe\\db_pipe";
 
 constexpr int POLL_PERIOD_MS = 500;
 
+constexpr std::string DATABASE_PATH = "/tmp/db";
+
 void process_connection(std::unique_ptr<IPCConnection>&& connection){
     connection->send("Test");
     std::string response = connection->receive();
@@ -34,6 +38,7 @@ void process_connection(std::unique_ptr<IPCConnection>&& connection){
 }
 
 int main(){
+    Database db(DATABASE_PATH);
     JobQueue job_queue;
     
     std::unique_ptr<IPCSocket> socket = std::make_unique<SocketInterface>(SOCKET_PATH);

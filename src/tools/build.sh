@@ -4,5 +4,5 @@ mkdir -p ${BUILD_DIR}
 
 cd ${BUILD_DIR}
 
-cmake ..
+cmake .. -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 make
