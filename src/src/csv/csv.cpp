@@ -1,4 +1,5 @@
 #include "csv/csv.h"
+#include "db/exceptions.h"
 
 #include <sstream>
 
@@ -9,6 +10,7 @@ constexpr char NULL_ESCAPE = 'x';
 void write_element(std::ostream& output, const VoidableString& element) {
     if(!element.has_value()){
         output << ESCAPE_SEQUENCE << NULL_ESCAPE; 
+        return;
     }
     
     auto& content = element.value();
@@ -61,7 +63,7 @@ VoidableString parse_word(std::istream& line){
                 if(!result.empty()){
                     throw ParsingError("Null field has additional content");
                 }
-                if(line.peek() != SEPARATOR){
+                if(line.get() != SEPARATOR){
                     throw ParsingError("Null field has additional content");
                 }
                 return std::nullopt;

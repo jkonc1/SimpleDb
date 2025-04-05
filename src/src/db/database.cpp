@@ -1,5 +1,7 @@
 #include "db/database.h"
 #include "db/table_serialization.h"
+#include "db/exceptions.h"
+#include "parse/type.h"
 
 #include <fstream>
 #include <mutex>
@@ -27,14 +29,14 @@ Database::Database(const std::filesystem::path& path) : path(path) {
             throw std::runtime_error("Failed to open file " + filename.string() + " - " + std::string(e.what()));
         }
         
-        std::shared_ptr<Table> table;
         try{
-            table = std::make_shared<Table>(load_table(file));
-        }catch(std::exception& e){
-            throw std::runtime_error("Failed parse table " + filename.string() + " - " + std::string(e.what()));
+            add_table(table_name, load_table(file));
+        }catch(ParsingError& e){
+            throw std::runtime_error("Failed to parse table " + filename.string() + " - " + std::string(e.what()));
         }
-        
-        add_table(table_name, table);
+        catch(std::exception& e){
+            throw std::runtime_error("Failed to load table " + filename.string() + " - " + std::string(e.what()));
+        }
     }
 }
 
@@ -77,12 +79,6 @@ void Database::init_directory(const std::filesystem::path& path){
     }
 }
 
-std::string Database::_process_query(const std::string& query){
-    // TODO
-    throw std::runtime_error("Not implemented");
-    return query;
-}
-
 std::filesystem::path make_temp_dir() {
     // TODO this is not ideal since we are potentially sharing the database to all users
     std::string random_filename = std::to_string(std::random_device()());
@@ -101,7 +97,7 @@ void Database::save() const {
     for(const auto& [table_name, table] : tables){
         std::ofstream file(temp_dir/table_name);
         
-        serialize_table(*table, file);
+        serialize_table(table, file);
     }
     
     // let's just check it once again before deleting
@@ -111,14 +107,23 @@ void Database::save() const {
     std::filesystem::rename(temp_dir, path);
 }
 
-void Database::add_table(const std::string& table_name, std::shared_ptr<Table> table){
+void Database::add_table(const std::string& table_name, Table table){
     auto lock = std::unique_lock(tables_lock);
     
     if(tables.contains(table_name)){
         throw std::runtime_error("Table " + table_name + " already exists");
     }
     
-    tables[table_name] = table;
+    tables.emplace(table_name, std::move(table));
+}
+
+Table& Database::get_table(const std::string& table_name){
+    try{
+        return tables.at(table_name);
+    }
+    catch(std::out_of_range&){
+        throw InvalidQuery("Table " + table_name + " does not exist");
+    }
 }
 
 void Database::remove_table(const std::string& table_name){

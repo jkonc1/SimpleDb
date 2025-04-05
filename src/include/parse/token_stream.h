@@ -30,7 +30,6 @@ public:
     
     const Token& peek_token();
     
-    void ignore_whitespace();
     
     void ignore_token(Token token);
     void ignore_token(std::string token);
@@ -41,10 +40,14 @@ private:
     char peek();
     char get();
     
+    void ignore_whitespace();
+    
     Token get_identifier();
     Token get_number();
     Token get_string();
     Token get_special_char();
+    
+    bool stream_empty();
     
     void load_next_token();
     

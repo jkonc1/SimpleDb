@@ -3,26 +3,29 @@
 
 #include <string>
 #include <vector>
-#include <memory>
 #include <shared_mutex>
-#include <optional>
 
 #include "db/cell.h"
 
 using TableRow = std::vector<Cell>;
 
-struct TableHeader{
-    std::vector<std::string> column_names;
-    std::vector<Cell::DataType> column_types;
+class Table;
 
-    size_t column_count() const { return column_names.size(); }
-
+class TableHeader{
+public:
     TableHeader(){}
     TableHeader(std::vector<std::string> column_names, std::vector<Cell::DataType> column_types);
 
+    size_t column_count() const { return column_names.size(); }
+    std::vector<Cell> parse_row(const std::vector<std::optional<std::string>>& data) const;
+    
     static TableHeader join(const TableHeader& left, const TableHeader& right);
-
-    bool validate_row(const TableRow& row) const;
+    
+private: 
+    std::vector<std::string> column_names;
+    std::vector<Cell::DataType> column_types;
+    
+    friend void serialize_table(const Table& table, std::ostream& os);
 };
 
 class Table{
@@ -32,7 +35,7 @@ public:
     
     Table(Table&& other) noexcept;
 
-    void add_row(std::vector<Cell> data);
+    void add_row(const std::vector<std::optional<std::string>>& row);
 
     Table filter(const std::string& predicate) const;
     static Table full_join(const Table& left, const Table& right);
@@ -40,7 +43,9 @@ private:
     TableHeader header;
     std::vector<TableRow> rows;
 
-    std::shared_mutex mutex;
+    void add_row(std::vector<Cell> data);
+    
+    mutable std::shared_mutex mutex;
     
     friend void serialize_table(const Table& table, std::ostream& os);
 };

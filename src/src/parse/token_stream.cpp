@@ -11,10 +11,8 @@ bool is_whitespace(char c) {
 }
 
 void TokenStream::ignore_whitespace() {
-    char c = peek();
-    while (is_whitespace(c)) {
+    while (!stream_empty() && is_whitespace(peek())) {
         get();
-        c = peek();
     }
 }
 
@@ -30,6 +28,10 @@ char TokenStream::peek() {
     return stream.peek();
 }
 
+bool TokenStream::stream_empty() {
+    return peek() == EOF;
+}
+
 bool starts_identifier(char c) {
     return isalpha(c);
 }
@@ -39,7 +41,7 @@ bool starts_number(char c) {
 }
 
 bool starts_string(char c) {
-    return c == '"';
+    return c == '"' || c == '\'';
 }
 
 void TokenStream::load_next_token() {
@@ -49,12 +51,14 @@ void TokenStream::load_next_token() {
     
     ignore_whitespace();
     
-    char c = peek();
     
-    if (c == EOF){
-        next_token =  {TokenType::Empty, ""};
+    if (stream_empty()){
+        next_token = {TokenType::Empty, ""};
+        return;
     }
-    else if(starts_string(c)){
+    
+    char c = peek();
+    if(starts_string(c)){
         next_token =  get_string();
     }
     else if(starts_identifier(c)){
@@ -84,17 +88,17 @@ Token TokenStream::get_token() {
 }
 
 std::string TokenStream::get_token(TokenType type){
-    Token token = get_token();
+    Token token = peek_token();
     if(token.type != type){
         throw InvalidQuery("Invalid token type");
     }
-    return token.value;
+    return get_token().value;
 }
 
 Token TokenStream::get_number() {
     std::string value;
     char c = peek();
-    while (isdigit(c) || c == '.') {
+    while (!stream_empty() && (isdigit(c) || c == '.')) {
         value += get();
         c = peek();
     }
@@ -103,8 +107,10 @@ Token TokenStream::get_number() {
 
 Token TokenStream::get_string() {
     std::string value;
+    char quote = get();
+    
     char c = get();
-    while (c != '"') {
+    while (!stream_empty() && c != quote) {
         value += c;
         c = get();
     }
@@ -114,7 +120,7 @@ Token TokenStream::get_string() {
 Token TokenStream::get_identifier() {
     std::string value;
     char c = peek();
-    while (isalpha(c) || isdigit(c) || c == '_') {
+    while (!stream_empty() && (isalpha(c) || isdigit(c) || c == '_')) {
         value += get();
         c = peek();
     }
@@ -122,21 +128,25 @@ Token TokenStream::get_identifier() {
 }
 
 Token TokenStream::get_special_char(){
-    return {TokenType::SpecialChar, std::to_string(get())};
+    return {TokenType::SpecialChar, std::string(1, get())};
 }
 
 void TokenStream::ignore_token(Token token) {
-    Token next = get_token();
+    Token next = peek_token();
     
     if(token != next){
         throw InvalidQuery("Expected token " + token.value + ", got " + next.value);
     }
+    
+    get_token();
 }
 
 void TokenStream::ignore_token(std::string token) {
-    Token next = get_token();
+    Token next = peek_token();
     
     if(token != next.value){
         throw InvalidQuery("Expected token " + token + ", got " + next.value);
     }
+    
+    get_token();
 }

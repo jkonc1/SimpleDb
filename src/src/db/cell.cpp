@@ -74,8 +74,7 @@ template <class T>
 T string_to(const std::string& value) {
     std::stringstream stream(value);
     T result;
-    stream >> result;
-    if (!(stream >> result) || !(stream.eof())) {
+    if (!(stream >> result) || stream.peek() != EOF) {
         throw InvalidConversion("Could not convert string to value");
     }
     return result;
