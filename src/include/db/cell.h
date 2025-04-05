@@ -3,15 +3,11 @@
 
 #include <variant>
 #include <string>
+#include <optional>
+
 
 class Cell{
 public:
-    Cell(const std::string& str) : data(str) {}
-    Cell(const int num) : data(num) {}
-    Cell(const float num) : data(num) {}
-    Cell(const char ch) : data(ch) {}
-    Cell() : data(std::monostate()) {}
-    
     enum class DataType{
         Null,
         String,
@@ -19,25 +15,13 @@ public:
         Float,
         Char
     };
+
+    explicit Cell() : data(std::monostate()) {}
     
-    bool is_null() const {
-        return std::holds_alternative<std::monostate>(data);
-    }
-    
-    bool is_int() const {
-        return std::holds_alternative<int>(data);
-    }
-    
-    bool is_float() const {
-        return std::holds_alternative<float>(data);
-    }
-    
-    bool is_char() const {
-        return std::holds_alternative<char>(data);
-    }
-    
-    bool is_string() const {
-        return std::holds_alternative<std::string>(data);
+    template<class T>
+    Cell(T&& value, DataType type) {
+        Cell temp(std::forward<T>(value));
+        *this = temp.convert(type);
     }
     
     static std::pair<Cell, Cell> promote_to_common(const Cell& a, const Cell& b);
@@ -47,13 +31,21 @@ public:
     Cell operator*(const Cell& other) const;
     Cell operator/(const Cell& other) const;
     
-private:
-    bool is_number() const {
-        return is_int() || is_float();
-    }
+    DataType type() const;
     
-    Cell to_float() const;
-    Cell to_string() const;
+    std::optional<std::string> repr() const;
+    
+private:
+    
+    template<class T>
+    explicit Cell(T&& value) : data(std::forward<T>(value)) {}
+
+    Cell convert(DataType target_type) const;
+    
+    Cell convert_to_string() const;
+    Cell convert_to_int() const;
+    Cell convert_to_float() const;
+    Cell convert_to_char() const;
     
     std::variant<std::monostate, int, float, char, std::string> data;
 };
