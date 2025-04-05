@@ -1,9 +1,8 @@
 #ifndef TOKEN_STREAM_H
 #define TOKEN_STREAM_H
 
-#include <memory>
 #include <string>
-#include <istream>
+#include <sstream>
 
 enum class TokenType {
     Identifier,
@@ -13,17 +12,30 @@ enum class TokenType {
     Empty
 };
 
-using Token = std::pair<TokenType, std::string>;
+struct Token{
+    TokenType type;
+    std::string value;
+    
+    bool operator==(const Token& other) const {
+        return type == other.type && value == other.value;
+    }
+};
 
 class TokenStream {
 public:
-    TokenStream(std::unique_ptr<std::istream> stream);
+    TokenStream(std::string string);
     
     Token get_token();
+    std::string get_token(TokenType type);
+    
+    const Token& peek_token();
     
     void ignore_whitespace();
     
-    bool empty() const;
+    void ignore_token(Token token);
+    void ignore_token(std::string token);
+    
+    bool empty();
 
 private:
     char peek();
@@ -34,9 +46,11 @@ private:
     Token get_string();
     Token get_special_char();
     
-    Token _get_token();
+    void load_next_token();
     
-    std::unique_ptr<std::istream> stream;
+    std::string base_string;
+    std::optional<Token> next_token;
+    std::stringstream stream;
 };
 
 #endif

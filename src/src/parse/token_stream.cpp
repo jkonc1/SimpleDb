@@ -1,8 +1,9 @@
-#include <net/if.h>
-#include <parse/token_stream.h>
+#include "db/exceptions.h"
+#include "parse/token_stream.h"
 
-TokenStream::TokenStream(std::unique_ptr<std::istream> stream)
-    : stream(std::move(stream)) {}
+
+TokenStream::TokenStream(std::string data)
+    : base_string(data), stream(base_string) {}
 
 
 bool is_whitespace(char c) {
@@ -17,12 +18,16 @@ void TokenStream::ignore_whitespace() {
     }
 }
 
+bool TokenStream::empty() {
+    return peek_token().type == TokenType::Empty;
+}
+
 char TokenStream::get() {
-    return stream->get();
+    return stream.get();
 }
 
 char TokenStream::peek() {
-    return stream->peek();
+    return stream.peek();
 }
 
 bool starts_identifier(char c) {
@@ -37,34 +42,53 @@ bool starts_string(char c) {
     return c == '"';
 }
 
-Token TokenStream::_get_token() {
-    if (empty()){
-        return {TokenType::Empty, ""};
+void TokenStream::load_next_token() {
+    if(next_token.has_value()){
+        return;
     }
+    
+    ignore_whitespace();
     
     char c = peek();
-    if(starts_string(c)){
-        return get_string();
+    
+    if (c == EOF){
+        next_token =  {TokenType::Empty, ""};
+    }
+    else if(starts_string(c)){
+        next_token =  get_string();
+    }
+    else if(starts_identifier(c)){
+        next_token = get_identifier();
+    }
+    else if(starts_number(c)){
+        next_token = get_number();
+    }
+    else{
+        next_token = get_special_char();
     }
     
-    if(starts_identifier(c)){
-        return get_identifier();
-    }
-    
-    if(starts_number(c)){
-        return get_number();
-    }
-    
-    return get_special_char();
+    ignore_whitespace();
+}
+
+const Token& TokenStream::peek_token() {
+    load_next_token();
+    return next_token.value();
 }
 
 Token TokenStream::get_token() {
-    ignore_whitespace();
+    load_next_token();
     
-    Token result = _get_token();
-    
-    ignore_whitespace();
+    Token result = std::move(next_token.value());
+    next_token.reset();
     return result;
+}
+
+std::string TokenStream::get_token(TokenType type){
+    Token token = get_token();
+    if(token.type != type){
+        throw InvalidQuery("Invalid token type");
+    }
+    return token.value;
 }
 
 Token TokenStream::get_number() {
@@ -99,4 +123,20 @@ Token TokenStream::get_identifier() {
 
 Token TokenStream::get_special_char(){
     return {TokenType::SpecialChar, std::to_string(get())};
+}
+
+void TokenStream::ignore_token(Token token) {
+    Token next = get_token();
+    
+    if(token != next){
+        throw InvalidQuery("Expected token " + token.value + ", got " + next.value);
+    }
+}
+
+void TokenStream::ignore_token(std::string token) {
+    Token next = get_token();
+    
+    if(token != next.value){
+        throw InvalidQuery("Expected token " + token + ", got " + next.value);
+    }
 }
