@@ -3,6 +3,15 @@
 
 #include <cmath>
 #include <sstream>
+#include <utility>
+
+std::optional<std::string> Cell::repr() const {
+    if(type() == DataType::Null){
+        return std::nullopt;
+    }
+    
+    return std::get<std::string>(convert(DataType::String).data);
+}
 
 std::pair<Cell, Cell> Cell::promote_to_common(const Cell& a, const Cell& b) {
     // the promotion order is int -> float -> string -> null
@@ -58,6 +67,7 @@ Cell Cell::convert(DataType target_type) const {
         case DataType::Char:
             return convert_to_char();
     }
+    std::unreachable();
 }
 
 template <class T>
