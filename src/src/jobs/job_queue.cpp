@@ -20,7 +20,7 @@ void JobQueue::finish() {
 void JobQueue::add_job(std::move_only_function<void()> task){
     auto lock = std::unique_lock(mutex);
     
-    running_workers.push(std::thread([this, task = std::move(task)]() mutable {
+    running_workers.push(std::thread([task = std::move(task)]() mutable {
         task();
     }));
 }

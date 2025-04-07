@@ -9,7 +9,7 @@
 class AsioUDSSocket : public IPCSocket{
 public:
     AsioUDSSocket(const std::string& path);
-    ~AsioUDSSocket();
+    virtual ~AsioUDSSocket();
     
     std::unique_ptr<IPCConnection> accept() override;
 private:

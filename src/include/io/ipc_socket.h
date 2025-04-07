@@ -12,6 +12,8 @@ public:
     IPCConnection() = default;
     IPCConnection(const IPCConnection&) = delete;
     IPCConnection& operator=(const IPCConnection&) = delete;
+    
+    virtual ~IPCConnection() = default;
 };
 
 class IPCSocket {
@@ -21,6 +23,8 @@ public:
     IPCSocket() = default;
     IPCSocket(const IPCSocket&) = delete;
     IPCSocket& operator=(const IPCSocket&) = delete;
+    
+    virtual ~IPCSocket() = default;
 };
 
 #endif
