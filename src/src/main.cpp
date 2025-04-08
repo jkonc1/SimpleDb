@@ -1,7 +1,7 @@
 #include "io/ipc_socket.h"
 #include "jobs/job_queue.h"
 
-#include "db/database.h"
+#include "db/database_manager.h"
 
 #ifdef UNIX
 
@@ -38,7 +38,8 @@ void process_connection(std::unique_ptr<IPCConnection>&& connection){
 }
 
 int main(){
-    Database db(DATABASE_PATH);
+    DatabaseManager db(DATABASE_PATH);
+    db.load();
     JobQueue job_queue;
     
     std::unique_ptr<IPCSocket> socket = std::make_unique<SocketInterface>(SOCKET_PATH);
