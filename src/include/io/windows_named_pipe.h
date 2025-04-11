@@ -15,6 +15,7 @@ private:
     void start_accepting(std::function<void(std::unique_ptr<IPCConnection>&&)>);
     std::string path;
     asio::io_context io;
+    std::atomic<bool> listening = false;
 };
 
 class WindowsNamedPipeConnection : public IPCConnection{

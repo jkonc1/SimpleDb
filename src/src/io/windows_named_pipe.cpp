@@ -8,6 +8,8 @@ WindowsNamedPipe::WindowsNamedPipe(const std::string& path) : path(path), io() {
 }
 
 void WindowsNamedPipe::start_accepting(std::function<void(std::unique_ptr<IPCConnection>&&)> callback) {
+    if(!listening) return;
+
     HANDLE pipe_handle = ::CreateNamedPipeA(
         path.c_str(),
         PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
@@ -17,45 +19,57 @@ void WindowsNamedPipe::start_accepting(std::function<void(std::unique_ptr<IPCCon
     );
 
     if (pipe_handle == INVALID_HANDLE_VALUE) {
-        throw std::runtime_error("CreateNamedPipe failed: " + std::to_string(GetLastError()));
+        throw std::runtime_error("Failed to create windows named pipe");
     }
 
-    auto new_pipe = std::make_shared<asio::windows::stream_handle>(io, pipe_handle);
+    auto event = std::make_shared<asio::windows::object_handle>(io, CreateEvent(nullptr, TRUE, FALSE, nullptr));
+    if (!event->is_open()) {
+        CloseHandle(pipe_handle);
+        throw std::runtime_error("Failed to create windows event");
+    }
 
-    auto overlapped = std::make_shared<OVERLAPPED>();
-    
-    ::memset(overlapped.get(), 0, sizeof(OVERLAPPED));
+    OVERLAPPED overlapped{};
+    overlapped.hEvent = event->native_handle();
 
-    ConnectNamedPipe(pipe_handle, overlapped.get());
-    
-    if (GetLastError() == ERROR_IO_PENDING) {
-        new_pipe->async_wait(asio::windows::stream_handle::wait_read, [this, new_pipe, callback](const asio::error_code& ec) {
+    bool success = ConnectNamedPipe(pipe_handle, &overlapped);
+    DWORD last_error = GetLastError();
+
+    if (!success && last_error != ERROR_IO_PENDING) {
+        CloseHandle(pipe_handle);
+        throw std::runtime_error("Connecting named pipe failed");
+    }
+
+    event->async_wait(
+        [this, pipe_handle, overlapped, event = std::move(event), callback](const asio::error_code& ec) {
             if (!ec) {
-                auto connection = std::make_unique<WindowsNamedPipeConnection>(std::move(*new_pipe));
+                asio::windows::stream_handle stream(io, pipe_handle);
+                auto connection = std::make_unique<WindowsNamedPipeConnection>(std::move(stream));
                 callback(std::move(connection));
-            } else {
-                std::cerr << "ConnectNamedPipe failed async: " << ec.message() << std::endl;
-            }
 
-            start_accepting(callback);  // continue accepting
-        });
-    } else if (GetLastError() == ERROR_PIPE_CONNECTED) {
-        auto connection = std::make_unique<WindowsNamedPipeConnection>(std::move(*new_pipe));
-        callback(std::move(connection));
-        start_accepting(callback);
-    } else {
-        std::cerr << "ConnectNamedPipe failed: " << err << std::endl;
-        start_accepting(callback);  // try again
-    }
+                if (listening) {
+                    start_accepting(callback);
+                }
+            } else if (ec == asio::error::operation_aborted) {
+                CloseHandle(pipe_handle);
+            } else {
+                CloseHandle(pipe_handle);
+                throw std::runtime_error("Encountered an error while connecting to a client: " + ec.message());
+            }
+        }
+    );
 }
 
-void WindowsNamedPipe::listen(std::function<void(std::unique_ptr<IPCConnection>&&)>) {
+
+void WindowsNamedPipe::listen(std::function<void(std::unique_ptr<IPCConnection>&&)> callback) {
+    listening = true;
+
     start_accepting(callback);
     
     io.run();
 } 
 
 void WindowsNamedPipe::stop(){
+    listening = false;
     io.stop();
 }
 
