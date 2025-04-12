@@ -2,6 +2,8 @@
 #include "csv/csv.h"
 #include "db/exceptions.h"
 
+#include <ranges>
+
 namespace {
 std::string type_to_string(Cell::DataType type){
     switch(type){
@@ -73,8 +75,15 @@ Table load_table(std::istream& is){
     
     Table result(column_names, column_types);
     
-    for(size_t row = 2; row < data.size(); row++){
-        result.add_row(data[row]);
+    for(auto&& row : data | std::views::drop(2)){
+        std::map<std::string, std::string> assignments;
+        
+        for(auto&& [index, value] : std::views::enumerate(row)){
+            if(!value.has_value()) {
+                continue;
+            }
+            assignments.emplace(column_names[index], value.value());
+        }
     }
     
     return result;
@@ -96,14 +105,14 @@ void serialize_table(const Table& table, std::ostream& os) {
     
     VoidableRow names_row;
     
-    for(auto&& name : table.header.column_names){
-        names_row.push_back(name);
+    for(const auto& column : table.get_columns()){
+        names_row.push_back(column.name);
     }
     
     VoidableRow types_row;
     
-    for(auto&& type : table.header.column_types){
-        types_row.push_back(type_to_string(type));
+    for(auto&& column : table.get_columns()){
+        types_row.push_back(type_to_string(column.type));
     }
     
     result.push_back(names_row);

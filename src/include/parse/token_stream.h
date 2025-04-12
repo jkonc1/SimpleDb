@@ -29,7 +29,7 @@ public:
     std::string get_token(TokenType type);
     
     const Token& peek_token();
-    
+    const std::string& peek_token(TokenType type);
     
     void ignore_token(Token token);
     void ignore_token(std::string token);

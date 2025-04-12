@@ -79,6 +79,14 @@ const Token& TokenStream::peek_token() {
     return next_token.value();
 }
 
+const std::string& TokenStream::peek_token(TokenType type) {
+    const Token& res = peek_token();
+    if(res.type != type){
+        throw InvalidQuery("Invalid token : " + res.value);
+    }
+    return res.value;
+}
+
 Token TokenStream::get_token() {
     load_next_token();
     

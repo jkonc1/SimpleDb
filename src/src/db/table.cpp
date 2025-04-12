@@ -1,45 +1,57 @@
 #include "db/table.h"
 #include "db/exceptions.h"
 
-TableHeader::TableHeader(std::vector<std::string> column_names, std::vector<Cell::DataType> column_types):
-    column_names(std::move(column_names)), column_types(std::move(column_types))
+#include <ranges>
+
+TableHeader::TableHeader(std::vector<std::string> column_names, std::vector<Cell::DataType> column_types)
 {
     if(column_names.size() != column_types.size()){
         throw std::runtime_error("Column count mismatch");
     }
+    
+    for(auto&& [column_name, column_type] : std::views::zip(column_names, column_types)){
+        ColumnDescriptor column(column_name, column_type);
+        
+        columns.push_back(column);
+        
+        column_to_index[column_name] = columns.size() - 1;
+    }
 }
 
 TableHeader TableHeader::join(const TableHeader& left, const TableHeader& right){
-    std::vector<std::string> names = left.column_names;
-    names.insert(names.end(), right.column_names.begin(), right.column_names.end());
-    
-    std::vector<Cell::DataType> types = left.column_types;
-    types.insert(types.end(), right.column_types.begin(), right.column_types.end());
-    
-    return TableHeader(names, types);
+    return TableHeader(left, right);
 }
 
-TableRow TableHeader::parse_row(const std::vector<std::optional<std::string>>& data) const {
-    std::vector<Cell> cells;
+TableHeader::TableHeader(const TableHeader& left, const TableHeader& right){
+    columns = left.columns;
+    column_to_index = left.column_to_index;
     
-    if(data.size() != column_count()){
-        throw InvalidQuery("Row size mismatch");
-    }
-    
-    for(size_t column = 0; column < column_names.size(); column++){
-        Cell::DataType type = column_types[column];
+    for(auto&& [column_name, column_type] : right.columns){
+        ColumnDescriptor column(column_name, column_type);
         
-        if(data[column].has_value()){
-            cells.push_back(Cell(data[column].value(), type));
-        } else {
-            cells.push_back(Cell());
+        columns.push_back(column);
+        
+        column_to_index[column_name] = columns.size() - 1;
+    }
+}
+
+TableRow TableHeader::create_row(const std::map<std::string, std::string>& data) const {
+    std::vector<Cell> cells(column_count());
+    
+    for(auto&& [column_name, value] : data){
+        if(!column_to_index.contains(column_name)){
+            throw InvalidQuery("Column '" + column_name + "' does not exist");
         }
+        size_t index = column_to_index.at(column_name);
+        
+        cells[index] = Cell(value, columns[index].type);
     }
     
     return cells;
 }
 
 TableRow join_rows(const TableRow& left, const TableRow& right){
+    // TODO: this is a bit weird with remade indexing, probably move to header
     std::vector<Cell> result_cells = left;
     result_cells.insert(result_cells.end(), right.begin(), right.end());
     return result_cells;
@@ -68,8 +80,8 @@ void Table::add_row(std::vector<Cell> data){
     rows.push_back(std::move(data));
 }
 
-void Table::add_row(const std::vector<std::optional<std::string>>& data){
-    add_row(header.parse_row(data));
+void Table::add_row(const std::map<std::string, std::string>& data){
+    add_row(header.create_row(data));
 }
 
 Table Table::full_join(const Table& left, const Table& right){
@@ -83,4 +95,12 @@ Table Table::full_join(const Table& left, const Table& right){
     }
     
     return result;
+}
+
+const std::vector<ColumnDescriptor>& Table::get_columns() const{
+    return header.get_columns();
+}
+
+const std::vector<ColumnDescriptor>& TableHeader::get_columns() const{
+    return columns;
 }

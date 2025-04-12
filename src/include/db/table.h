@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <shared_mutex>
+#include <map>
 
 #include "db/cell.h"
 
@@ -11,21 +12,29 @@ using TableRow = std::vector<Cell>;
 
 class Table;
 
+struct ColumnDescriptor{
+    std::string name;
+    Cell::DataType type;
+};
+
 class TableHeader{
 public:
     TableHeader(){}
     TableHeader(std::vector<std::string> column_names, std::vector<Cell::DataType> column_types);
-
-    size_t column_count() const { return column_names.size(); }
-    std::vector<Cell> parse_row(const std::vector<std::optional<std::string>>& data) const;
+    
+    const std::vector<ColumnDescriptor>& get_columns() const;
+    
+    size_t column_count() const { return columns.size(); }
+    std::vector<Cell> create_row(const std::map<std::string, std::string>& data) const;
     
     static TableHeader join(const TableHeader& left, const TableHeader& right);
     
 private: 
-    std::vector<std::string> column_names;
-    std::vector<Cell::DataType> column_types;
+    std::vector<ColumnDescriptor> columns;
     
-    friend void serialize_table(const Table& table, std::ostream& os);
+    TableHeader(const TableHeader& left, const TableHeader& right);
+    
+    std::map<std::string, size_t> column_to_index;
 };
 
 class Table{
@@ -35,7 +44,9 @@ public:
     
     Table(Table&& other) noexcept;
 
-    void add_row(const std::vector<std::optional<std::string>>& row);
+    void add_row(const std::map<std::string, std::string>& values);
+    
+    const std::vector<ColumnDescriptor>& get_columns() const;
 
     Table filter(const std::string& predicate) const;
     static Table full_join(const Table& left, const Table& right);

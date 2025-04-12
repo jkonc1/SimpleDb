@@ -54,22 +54,19 @@ std::string Database::process_query(const std::string& query) noexcept{
 std::string Database::_process_query(const std::string& query){
     TokenStream stream(query);
     
-    std::string command = stream.get_token(TokenType::Identifier);
+    std::string command = stream.peek_token(TokenType::Identifier);
     
     if(command == "CREATE"){
-        stream.ignore_token("TABLE");
         return process_create_table(stream);
     }
     
     else if(command == "DROP"){
-        stream.ignore_token("TABLE");
         return process_drop_table(stream);
     }
     else if(command == "SELECT"){
         return process_select(stream);
     }
     else if(command == "INSERT"){
-        stream.ignore_token("INTO");
         return process_insert(stream);
     }
     else if(command == "DELETE"){
@@ -80,7 +77,31 @@ std::string Database::_process_query(const std::string& query){
     }
 }
 
+std::vector<std::string> read_parenthesized_array(TokenStream& stream){
+    std::vector<std::string> result;
+    
+    stream.ignore_token("(");
+    
+    while(true){
+        auto value = stream.get_token();
+        result.push_back(value.value);
+        
+        if(stream.peek_token().value == ")"){
+            break;
+        }
+        
+        stream.ignore_token(",");
+    }
+    
+    stream.ignore_token(")");
+    
+    return result;
+}
+
 std::string Database::process_drop_table(TokenStream& stream){
+    stream.ignore_token("DROP");
+    stream.ignore_token("TABLE");
+    
     std::string table_name = stream.get_token(TokenType::Identifier);
     
     stream.ignore_token(";");
@@ -92,6 +113,9 @@ std::string Database::process_drop_table(TokenStream& stream){
 }
 
 std::string Database::process_create_table(TokenStream& stream){
+    stream.ignore_token("CREATE");
+    stream.ignore_token("TABLE");
+    
     std::string table_name = stream.get_token(TokenType::Identifier);
     
     std::vector<std::string> column_names;
@@ -125,31 +149,39 @@ std::string Database::process_create_table(TokenStream& stream){
     return "Table " + table_name + " created";
 }
 
-/*
 std::string Database::process_insert(TokenStream& stream){
+    stream.ignore_token("INSERT");
+    stream.ignore_token("INTO");
+    
     std::string table_name = stream.get_token(TokenType::Identifier);
-    
-    stream.ignore_token("VALUES");
-    
-    std::vector<Cell> values;
-    
-    stream.ignore_token("(");
-    
-    while(stream.peek_token().value != ")"){
-        values.push_back(parse_token(stream));
-    }
-    
-    stream.ignore_token(")");
-    stream.ignore_token(";");
     
     Table& table = get_table(table_name);
     
-    table.add_row(std::move(values));
+    std::vector<std::string> column_names;
+    
+    if(stream.peek_token().value == "("){
+        column_names = read_parenthesized_array(stream);
+    }
+    else{
+        for(const auto& column : table.get_columns()){
+            column_names.push_back(column.name);
+        }
+    }
+    
+    stream.ignore_token("VALUES");
+    
+    std::vector<std::string> values = read_parenthesized_array(stream);
+    
+    std::map<std::string, std::string> column_value_map;
+    
+    for(size_t i = 0; i < column_names.size(); ++i){
+        column_value_map[column_names[i]] = values[i];
+    }
+    
+    table.add_row(column_value_map);
     
     return make_response(true, "Row inserted into table " + table_name);
 }
-*/
 
 std::string Database::process_select(TokenStream&){ throw std::runtime_error("Not implemented");};
-std::string Database::process_insert(TokenStream&){ throw std::runtime_error("Not implemented");};
 std::string Database::process_delete(TokenStream&){ throw std::runtime_error("Not implemented");};

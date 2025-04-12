@@ -9,7 +9,9 @@
 DatabaseManager::DatabaseManager(const std::filesystem::path& path) : path(path) {}
 
 DatabaseManager::~DatabaseManager(){
-    save();
+    if(is_loaded()){
+        save();
+    }
 }
 
 bool DatabaseManager::is_loaded() const {
