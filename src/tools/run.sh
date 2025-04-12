@@ -1,1 +1,1 @@
-./tools/build.sh && ./build/Dumbatase
+./tools/build.sh && ./build/Dumbatase "$@"

@@ -37,7 +37,7 @@ std::string make_response(bool success, const std::string& message){
     return std::string(success ? "OK" : "ERROR") + " " + message;
 }
 
-std::string Database::process_query(const std::string& query){
+std::string Database::process_query(const std::string& query) noexcept{
     bool success = true;
     std::string message;
     try {

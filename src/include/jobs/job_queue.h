@@ -11,7 +11,7 @@ public:
     JobQueue();
     ~JobQueue();
     
-    void add_job(std::move_only_function<void()> task);
+    void add_job(std::move_only_function<void() noexcept> task);
     void finish();
 private:
     std::mutex mutex;

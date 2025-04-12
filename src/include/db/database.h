@@ -11,7 +11,7 @@
 
 class Database {
 public:
-    std::string process_query(const std::string& query);
+    std::string process_query(const std::string& query) noexcept;
     
 private:
     Table& get_table(const std::string& name);
