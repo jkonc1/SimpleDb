@@ -9,10 +9,13 @@
 class WindowsNamedPipe : public IPCSocket {
 public:
     WindowsNamedPipe(const std::string& path);
-    virtual std::unique_ptr<IPCConnection> accept() override;
+    void listen(std::function<void(std::unique_ptr<IPCConnection>&&)>) override;
+    void stop() override;
 private:
+    void start_accepting(std::function<void(std::unique_ptr<IPCConnection>&&)>);
     std::string path;
     asio::io_context io;
+    std::atomic<bool> listening = false;
 };
 
 class WindowsNamedPipeConnection : public IPCConnection{

@@ -3,6 +3,7 @@
 
 #include <string>
 #include <memory>
+#include <functional>
 
 class IPCConnection{
 public:
@@ -18,11 +19,11 @@ public:
 
 class IPCSocket {
 public:
-    virtual std::unique_ptr<IPCConnection> accept() = 0;
-    
     IPCSocket() = default;
     IPCSocket(const IPCSocket&) = delete;
     IPCSocket& operator=(const IPCSocket&) = delete;
+    virtual void listen(std::function<void(std::unique_ptr<IPCConnection>&&)> callback) = 0;
+    virtual void stop() = 0;
     
     virtual ~IPCSocket() = default;
 };

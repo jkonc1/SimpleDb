@@ -1,7 +1,9 @@
 #include "io/ipc_socket.h"
 #include "jobs/job_queue.h"
+#include "helper/logger.h"
 
 #include "db/database_manager.h"
+#include <cmath>
 
 #ifdef UNIX
 
@@ -20,21 +22,35 @@ const std::string SOCKET_PATH = "\\\\.\\pipe\\db_pipe";
 #endif
 
 #include <iostream>
-#include <chrono>
-#include <thread>
 #include <unistd.h>
 
-constexpr int POLL_PERIOD_MS = 500;
+std::function<void()> sigint_handler;
+
+void handle_sigint(int) {
+    sigint_handler();
+}
 
 constexpr std::string DATABASE_PATH = "/tmp/db";
 
-void process_connection(std::unique_ptr<IPCConnection>&& connection){
-    connection->send("Test");
-    std::string response = connection->receive();
-    std::cout << "received " << response << std::endl;
-    connection->send("Hello " + response);
+void process_connection(std::unique_ptr<IPCConnection>&& connection, Database& db) noexcept {
+    std::string query;
     
-    sleep(10);
+    try{
+        query = connection->receive();
+    }
+    catch(const std::exception& e){
+        logger::log("Failed to read query");
+        return;
+    }
+    
+    std::string response = db.process_query(query);
+    
+    try{
+        connection->send(response);
+    }
+    catch(const std::exception& e){
+        logger::log("Failed to send response");
+    }
 }
 
 int main(){
@@ -44,20 +60,23 @@ int main(){
     
     std::unique_ptr<IPCSocket> socket = std::make_unique<SocketInterface>(SOCKET_PATH);
     
-    while(true){
-        auto connection = socket->accept();
-
-        while (connection == NULL) {
-            connection = socket->accept();
-            std::this_thread::sleep_for(std::chrono::milliseconds(POLL_PERIOD_MS));
-        }
-        
-        job_queue.add_job([connection = std::move(connection)]() mutable {
-            process_connection(std::move(connection));
-        });
-        break;
-        
-    }
+    auto callback = [&job_queue, &db = db.get()](std::unique_ptr<IPCConnection>&& connection){
+        job_queue.add_job(
+            [connection = std::move(connection), &db]() mutable {
+                process_connection(std::move(connection), db);
+            }
+        );
+    };
     
     job_queue.finish();
+    
+    sigint_handler = [&socket] {
+        socket->stop();
+    };
+    
+    ::signal(SIGINT, handle_sigint);
+    
+    socket->listen(callback);
+    
+    std::cout << "Exiting" << std::endl;
 }

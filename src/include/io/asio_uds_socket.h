@@ -11,8 +11,10 @@ public:
     AsioUDSSocket(const std::string& path);
     virtual ~AsioUDSSocket();
     
-    std::unique_ptr<IPCConnection> accept() override;
+    void listen(std::function<void(std::unique_ptr<IPCConnection>&&)> callback) override;
+    void stop() override;
 private:
+    void start_accepting(std::function<void(std::unique_ptr<IPCConnection>&&)> callback);
     std::string path;
     asio::io_context io;
     asio::local::stream_protocol::acceptor acceptor;
