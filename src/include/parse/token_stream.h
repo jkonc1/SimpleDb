@@ -35,6 +35,8 @@ public:
     void ignore_token(std::string token);
     
     bool empty();
+    
+    void assert_end();
 
 private:
     char peek();

@@ -4,7 +4,6 @@
 
 #include <mutex>
 
-
 void Database::add_table(const std::string& table_name, Table table){
     auto lock = std::unique_lock(tables_lock);
     
@@ -82,15 +81,14 @@ std::string Database::_process_query(const std::string& query){
 }
 
 std::string Database::process_drop_table(TokenStream& stream){
-    std::string table_name;
+    std::string table_name = stream.get_token(TokenType::Identifier);
     
-    if(stream.empty()){
-        throw InvalidQuery("Invalid query format");
-    }
+    stream.ignore_token(";");
+    stream.assert_end();
     
     remove_table(table_name);
     
-    return make_response(true, "Table " + table_name + " dropped");
+    return "Table " + table_name + " dropped";
 }
 
 std::string Database::process_create_table(TokenStream& stream){
@@ -101,22 +99,30 @@ std::string Database::process_create_table(TokenStream& stream){
     
     stream.ignore_token("(");
     
-    while(stream.peek_token().value != ")"){
+    while(true){
         std::string name = stream.get_token(TokenType::Identifier);
         Cell::DataType type = string_to_type(stream.get_token(TokenType::Identifier));
         
         column_names.push_back(std::move(name));
         column_types.push_back(std::move(type));
+        
+        std::string separator = stream.get_token(TokenType::SpecialChar);
+        if(separator == ")"){
+            break;
+        }
+        else if(separator != ","){
+            throw InvalidQuery("Invalid column separator");
+        }
     }
     
-    stream.ignore_token(")");
     stream.ignore_token(";");
+    stream.assert_end();
     
     Table table(std::move(column_names), std::move(column_types));
     
     add_table(table_name, std::move(table));
     
-    return make_response(true, "Table " + table_name + " created");
+    return "Table " + table_name + " created";
 }
 
 /*

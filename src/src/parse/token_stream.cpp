@@ -33,7 +33,7 @@ bool TokenStream::stream_empty() {
 }
 
 bool starts_identifier(char c) {
-    return isalpha(c);
+    return isalpha(c) || c == '_';
 }
 
 bool starts_number(char c) {
@@ -90,7 +90,7 @@ Token TokenStream::get_token() {
 std::string TokenStream::get_token(TokenType type){
     Token token = peek_token();
     if(token.type != type){
-        throw InvalidQuery("Invalid token type");
+        throw InvalidQuery("Invalid token : " + token.value);
     }
     return get_token().value;
 }
@@ -149,4 +149,10 @@ void TokenStream::ignore_token(std::string token) {
     }
     
     get_token();
+}
+
+void TokenStream::assert_end() {
+    if(!empty()){
+        throw InvalidQuery("Expected end of input, got " + peek_token().value);
+    }
 }
