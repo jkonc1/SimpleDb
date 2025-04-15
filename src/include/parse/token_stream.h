@@ -19,6 +19,15 @@ struct Token{
     bool operator==(const Token& other) const {
         return type == other.type && value == other.value;
     }
+    
+    bool like(const std::string& what) const{
+        for (size_t i = 0; i < value.size(); ++i) {
+            if (tolower(value[i]) != tolower(what[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
 };
 
 class TokenStream {

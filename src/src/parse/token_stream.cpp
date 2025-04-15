@@ -152,7 +152,7 @@ void TokenStream::ignore_token(Token token) {
 void TokenStream::ignore_token(std::string token) {
     Token next = peek_token();
     
-    if(token != next.value){
+    if(!next.like(token)){
         throw InvalidQuery("Expected token " + token + ", got " + next.value);
     }
     

@@ -22,7 +22,11 @@ std::string type_to_string(Cell::DataType type){
     }
 }
 
-Cell::DataType string_to_type(const std::string& type){
+Cell::DataType string_to_type(std::string type){
+    for(auto& c : type){
+        c = std::toupper(c);
+    }
+    
     if(type == "NULL"){
         return Cell::DataType::Null;
     }else if(type == "INT"){
@@ -84,6 +88,8 @@ Table load_table(std::istream& is){
             }
             assignments.emplace(column_names[index], value.value());
         }
+        
+        result.add_row(assignments);
     }
     
     return result;
