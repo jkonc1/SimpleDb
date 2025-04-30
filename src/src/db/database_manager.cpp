@@ -6,7 +6,7 @@
 #include <random>
 #include <mutex>
 
-DatabaseManager::DatabaseManager(const std::filesystem::path& path) : path(path) {}
+DatabaseManager::DatabaseManager(const std::filesystem::path& database_directory) : path(database_directory) {}
 
 DatabaseManager::~DatabaseManager(){
     if(is_loaded()){
@@ -36,8 +36,8 @@ void DatabaseManager::load(){
     
     database = std::make_unique<Database>();
     
-    for(auto& entry : std::filesystem::directory_iterator(path)){
-        std::filesystem::path filename = entry.path();
+    for(const auto& entry : std::filesystem::directory_iterator(path)){
+        const std::filesystem::path& filename = entry.path();
         
         if(!is_table_file(filename)){
             // Skip magics, locks etc.

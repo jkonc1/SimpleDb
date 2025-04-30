@@ -36,6 +36,7 @@ if(CODE_COVERAGE)
 endif()
 
 set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -58,3 +59,4 @@ include_directories(tests/include)
 add_executable(Dumbatase ${sources} src/main.cpp)
 
 add_executable(DumbataseTests ${sources} ${test_sources} tests/test_main.cpp)
+set_target_properties(DumbataseTests PROPERTIES CXX_CLANG_TIDY "") # disable tidy

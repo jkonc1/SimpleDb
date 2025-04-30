@@ -3,7 +3,7 @@
 #include "io/asio_uds_socket.h"
 #include <iostream>
 
-AsioUDSSocket::AsioUDSSocket(const std::string& path) : path(path), io(), acceptor(io, asio::local::stream_protocol::endpoint(path)) {
+AsioUDSSocket::AsioUDSSocket(const std::string& path) : path(path), acceptor(io, asio::local::stream_protocol::endpoint(path)) {
 }
 
 void AsioUDSSocket::start_accepting(std::function<void(std::unique_ptr<IPCConnection>&&)> callback) {
@@ -42,7 +42,7 @@ AsioUDSConnection::AsioUDSConnection(asio::local::stream_protocol::socket&& sock
 }
 
 void AsioUDSConnection::send(const std::string& message) {
-    asio::write(socket, asio::buffer(message));
+    asio::write(socket, asio::buffer(message + "\n"));
 }
 
 std::string AsioUDSConnection::receive() {

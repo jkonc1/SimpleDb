@@ -2,5 +2,11 @@ Checks: >
   clang-analyzer-*,
   cppcoreguidelines-*,
   performance-*,
-  readability-*
+  readability-*,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-narrowing-conversions,
+  -readability-identifier-length,
+  -readability-implicit-bool-conversion,
+  -performance-avoid-endl
+  -performance-enum-size
 FormatStyle: file

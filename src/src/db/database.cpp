@@ -54,27 +54,29 @@ std::string Database::process_query(const std::string& query) noexcept{
 std::string Database::_process_query(const std::string& query){
     TokenStream stream(query);
     
-    std::string command = stream.peek_token(TokenType::Identifier);
+    Token command = stream.peek_token();
     
-    if(command == "CREATE"){
+    if(command.like("CREATE")){
         return process_create_table(stream);
     }
     
-    else if(command == "DROP"){
+    if(command.like("DROP")){
         return process_drop_table(stream);
     }
-    else if(command == "SELECT"){
+    
+    if(command.like("SELECT")){
         return process_select(stream);
     }
-    else if(command == "INSERT"){
+    
+    if(command.like("INSERT")){
         return process_insert(stream);
     }
-    else if(command == "DELETE"){
+    
+    if(command.like("DELETE")){
         return process_delete(stream);
     }
-    else{
-        throw InvalidQuery("Unknown query type");
-    }
+    
+    throw InvalidQuery("Unknown query type");
 }
 
 std::vector<std::string> read_parenthesized_array(TokenStream& stream){
@@ -128,13 +130,14 @@ std::string Database::process_create_table(TokenStream& stream){
         Cell::DataType type = string_to_type(stream.get_token(TokenType::Identifier));
         
         column_names.push_back(std::move(name));
-        column_types.push_back(std::move(type));
+        column_types.push_back(type);
         
         std::string separator = stream.get_token(TokenType::SpecialChar);
         if(separator == ")"){
             break;
         }
-        else if(separator != ","){
+        
+        if(separator != ","){
             throw InvalidQuery("Invalid column separator");
         }
     }
@@ -142,7 +145,7 @@ std::string Database::process_create_table(TokenStream& stream){
     stream.ignore_token(";");
     stream.assert_end();
     
-    Table table(std::move(column_names), std::move(column_types));
+    Table table(column_names, column_types);
     
     add_table(table_name, std::move(table));
     
@@ -183,5 +186,5 @@ std::string Database::process_insert(TokenStream& stream){
     return make_response(true, "Row inserted into table " + table_name);
 }
 
-std::string Database::process_select(TokenStream&){ throw std::runtime_error("Not implemented");};
-std::string Database::process_delete(TokenStream&){ throw std::runtime_error("Not implemented");};
+std::string Database::process_select(TokenStream&){ throw std::runtime_error("Not implemented");}; //NOLINT not implemented
+std::string Database::process_delete(TokenStream&){ throw std::runtime_error("Not implemented");}; //NOLINT not implemented

@@ -13,20 +13,20 @@ void write_element(std::ostream& output, const VoidableString& element) {
         return;
     }
     
-    auto& content = element.value();
+    const auto& content = element.value();
         
-    for(char c : content){
-        if(c==ESCAPE_SEQUENCE){
+    for(char current_char : content){
+        if(current_char==ESCAPE_SEQUENCE){
             output << ESCAPE_SEQUENCE << ESCAPE_SEQUENCE;
             continue;
         }
         
-        if(c==SEPARATOR){
+        if(current_char==SEPARATOR){
             output << ESCAPE_SEQUENCE << SEPARATOR;
             continue;
         }
         
-        output << c;
+        output << current_char;
     }
 }
 
@@ -44,13 +44,15 @@ VoidableString parse_word(std::istream& line){
     std::string result;
     
     while(true){
-        auto current = line.get();
+        char current = (char)line.get();
         
         if(current==EOF || current=='\n'){
             throw ParsingError("Unexpected end of line");
         }
         
-        if(current==',') break;
+        if(current==',') {
+            break;
+        }
         
         if(current == ESCAPE_SEQUENCE){
             auto next = line.get();

@@ -18,10 +18,10 @@ void WindowsNamedPipe::start_accepting(std::function<void(std::unique_ptr<IPCCon
         0, 0, 0, nullptr
     );
 
-    if (pipe_handle == INVALID_HANDLE_VALUE) {
-        throw std::runtime_error("Failed to create windows named pipe");
+    if(pipe_handle == INVALID_HANDLE_VALUE){
+        throw std::runtime_error((std:: string)"Failed to create pipe " + std::to_string(GetLastError()));
     }
-
+    
     auto event = std::make_shared<asio::windows::object_handle>(io, CreateEvent(nullptr, TRUE, FALSE, nullptr));
     if (!event->is_open()) {
         CloseHandle(pipe_handle);

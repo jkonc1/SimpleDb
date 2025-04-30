@@ -24,7 +24,7 @@ private:
     static void lock_directory(const std::filesystem::path& path);
     static void unlock_directory(const std::filesystem::path& path);
     
-    static bool is_table_file(const std::filesystem::path& path);
+    static bool is_table_file(const std::filesystem::path& filename);
 
     std::filesystem::path path;
     

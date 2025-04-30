@@ -23,24 +23,29 @@ std::string type_to_string(Cell::DataType type){
 }
 
 Cell::DataType string_to_type(std::string type){
-    for(auto& c : type){
-        c = std::toupper(c);
+    for(auto& current_char : type){
+        current_char = std::toupper(current_char);
     }
     
     if(type == "NULL"){
         return Cell::DataType::Null;
-    }else if(type == "INT"){
+    } 
+    if(type == "INT"){
         return Cell::DataType::Int;
-    }else if(type == "FLOAT"){
+    } 
+    if(type == "FLOAT"){
         return Cell::DataType::Float;
-    }else if(type == "STRING"){
-        return Cell::DataType::String;
-    }else if(type == "CHAR"){
-        return Cell::DataType::Char;
-    }else{
-        throw std::runtime_error("Invalid data type");
     }
+    if(type == "STRING"){
+        return Cell::DataType::String;
+    }
+    if(type == "CHAR"){
+        return Cell::DataType::Char;
+    }
+    throw std::runtime_error("Invalid data type");
+   
 }
+
 }
 
 Table load_table(std::istream& is){

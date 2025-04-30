@@ -1,13 +1,12 @@
 #include "db/exceptions.h"
 #include "parse/token_stream.h"
 
-
 TokenStream::TokenStream(std::string data)
-    : base_string(data), stream(base_string) {}
+    : base_string(std::move(data)), stream(base_string) {}
 
 
-bool is_whitespace(char c) {
-    return c == ' ' || c == '\t' || c == '\n';
+bool is_whitespace(char chr) {
+    return chr == ' ' || chr == '\t' || chr == '\n';
 }
 
 void TokenStream::ignore_whitespace() {
@@ -29,7 +28,7 @@ char TokenStream::peek() {
 }
 
 bool TokenStream::stream_empty() {
-    return peek() == EOF;
+    return peek() == EOF; 
 }
 
 bool starts_identifier(char c) {
@@ -139,7 +138,7 @@ Token TokenStream::get_special_char(){
     return {TokenType::SpecialChar, std::string(1, get())};
 }
 
-void TokenStream::ignore_token(Token token) {
+void TokenStream::ignore_token(const Token& token) {
     Token next = peek_token();
     
     if(token != next){
@@ -149,7 +148,7 @@ void TokenStream::ignore_token(Token token) {
     get_token();
 }
 
-void TokenStream::ignore_token(std::string token) {
+void TokenStream::ignore_token(const std::string& token) {
     Token next = peek_token();
     
     if(!next.like(token)){

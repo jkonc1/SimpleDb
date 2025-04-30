@@ -32,7 +32,7 @@ struct Token{
 
 class TokenStream {
 public:
-    TokenStream(std::string string);
+    TokenStream(std::string data);
     
     Token get_token();
     std::string get_token(TokenType type);
@@ -40,8 +40,8 @@ public:
     const Token& peek_token();
     const std::string& peek_token(TokenType type);
     
-    void ignore_token(Token token);
-    void ignore_token(std::string token);
+    void ignore_token(const Token& token);
+    void ignore_token(const std::string& token);
     
     bool empty();
     

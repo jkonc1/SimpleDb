@@ -5,6 +5,7 @@
 #include <vector>
 #include <shared_mutex>
 #include <map>
+#include <unordered_map>
 
 #include "db/cell.h"
 
@@ -48,9 +49,10 @@ public:
     
     const std::vector<ColumnDescriptor>& get_columns() const;
 
-    Table filter(const std::string& predicate) const;
+    std::unordered_map<Cell, Table> split_by_expression(const std::string& condition) const;
+    
     static Table full_join(const Table& left, const Table& right);
-private:
+protected:
     TableHeader header;
     std::vector<TableRow> rows;
 

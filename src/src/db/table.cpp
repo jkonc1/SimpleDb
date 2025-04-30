@@ -22,9 +22,8 @@ TableHeader TableHeader::join(const TableHeader& left, const TableHeader& right)
     return TableHeader(left, right);
 }
 
-TableHeader::TableHeader(const TableHeader& left, const TableHeader& right){
-    columns = left.columns;
-    column_to_index = left.column_to_index;
+TableHeader::TableHeader(const TableHeader& left, const TableHeader& right) :
+    columns(left.columns), column_to_index(left.column_to_index){
     
     for(auto&& [column_name, column_type] : right.columns){
         ColumnDescriptor column(column_name, column_type);
@@ -67,11 +66,10 @@ Table::Table(const std::vector<std::string>& column_names, const std::vector<Cel
 {
 }
 
-Table::Table(Table&& other) noexcept
+Table::Table(Table&& other) noexcept : 
+    header(std::move(other.header)), rows(std::move(other.rows))
 {
     auto lock = std::lock_guard(other.mutex);
-    header = std::move(other.header);
-    rows = std::move(other.rows);
 }
 
 void Table::add_row(std::vector<Cell> data){
@@ -80,16 +78,16 @@ void Table::add_row(std::vector<Cell> data){
     rows.push_back(std::move(data));
 }
 
-void Table::add_row(const std::map<std::string, std::string>& data){
-    add_row(header.create_row(data));
+void Table::add_row(const std::map<std::string, std::string>& values){
+    add_row(header.create_row(values));
 }
 
 Table Table::full_join(const Table& left, const Table& right){
     Table result(TableHeader::join(left.header, right.header));
     
     std::vector<TableRow> rows;
-    for(auto& left_row : left.rows){
-        for(auto& right_row : right.rows){
+    for(const auto& left_row : left.rows){
+        for(const auto& right_row : right.rows){
             rows.push_back(join_rows(left_row, right_row));
         }
     }

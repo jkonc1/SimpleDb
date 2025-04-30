@@ -18,7 +18,7 @@ using SocketInterface = WindowsNamedPipe;
 
 #include <iostream>
 
-void process_connection(std::unique_ptr<IPCConnection>&& connection, Database& db) noexcept {
+void process_connection(std::unique_ptr<IPCConnection> connection, Database& db) noexcept {
     std::string query;
     
     try{
@@ -45,13 +45,15 @@ void show_usage() noexcept {
 }
 
 int main(int argc, char* argv[]){
-    if(argc != 3){
+    std::vector<std::string_view> args(argv, argv + argc);
+    
+    if(args.size() != 3){
         show_usage();
         return 1;
     }
     
-    std::string db_path = argv[1];
-    std::string socket_path = argv[2];
+    auto db_path = args[1];
+    auto socket_path = args[2];
     
     DatabaseManager db(db_path);
     
@@ -68,7 +70,7 @@ int main(int argc, char* argv[]){
     std::unique_ptr<IPCSocket> socket;
     
     try{
-        socket = std::make_unique<SocketInterface>(socket_path);
+        socket = std::make_unique<SocketInterface>(std::string(socket_path));
     }
     catch(const std::exception& e){
         std::cerr << "Error creating socket: " << e.what() << std::endl;

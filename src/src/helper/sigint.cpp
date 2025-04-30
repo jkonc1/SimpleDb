@@ -3,9 +3,9 @@
 
 #include <csignal>
 
-static std::function<void()> sigint_handler;
+static std::function<void()> sigint_handler; //NOLINT
 
-void handle_sigint(int) {
+void handle_sigint(int) { //NOLINT
     static bool already_called = false;
     
     if(already_called){
@@ -20,7 +20,7 @@ void handle_sigint(int) {
 }
 
 void set_sigint_handler(std::function<void()> handler){
-    sigint_handler = handler;
+    sigint_handler = std::move(handler);
     
     ::signal(SIGINT, handle_sigint);
 }

@@ -13,29 +13,29 @@ std::optional<std::string> Cell::repr() const {
     return std::get<std::string>(convert(DataType::String).data);
 }
 
-std::pair<Cell, Cell> Cell::promote_to_common(const Cell& a, const Cell& b) {
+std::pair<Cell, Cell> Cell::promote_to_common(const Cell& left, const Cell& right) {
     // the promotion order is int -> float -> string -> null
     // char -> string
     
-    Cell::DataType type;
+    Cell::DataType type = DataType::Null;
     
-    if(a.type() == b.type()){
-        type = a.type();
+    if(left.type() == right.type()){
+        type = left.type();
     }
-    else if(a.type() == DataType::Null || b.type() == DataType::Null){
+    else if(left.type() == DataType::Null || right.type() == DataType::Null){
         type = DataType::Null;
     }
-    else if(a.type() == DataType::Int && b.type() == DataType::Float){
+    else if(left.type() == DataType::Int && right.type() == DataType::Float){
         type = DataType::Float;
     }
-    else if(a.type() == DataType::Float && b.type() == DataType::Int){
+    else if(left.type() == DataType::Float && right.type() == DataType::Int){
         type = DataType::Float;
     }
     else{
         type = DataType::String;
     }
     
-    return {a.convert(type), b.convert(type)};
+    return {left.convert(type), right.convert(type)};
 }
 
 template<class... Ts>

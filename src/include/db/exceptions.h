@@ -15,7 +15,7 @@ public:
 
 class ParsingError : public std::runtime_error {
 public:
-    ParsingError(std::string message) : std::runtime_error(message) { }
+    ParsingError(const std::string& message) : std::runtime_error(message) { }
 };
 
 #endif

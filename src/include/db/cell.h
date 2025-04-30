@@ -24,7 +24,7 @@ public:
         *this = temp.convert(type);
     }
     
-    static std::pair<Cell, Cell> promote_to_common(const Cell& a, const Cell& b);
+    static std::pair<Cell, Cell> promote_to_common(const Cell& left, const Cell& right);
     
     Cell operator+(const Cell& other) const;
     Cell operator-(const Cell& other) const;
@@ -48,6 +48,15 @@ private:
     Cell convert_to_char() const;
     
     std::variant<std::monostate, int, float, char, std::string> data;
+    
+    friend std::hash<Cell>;
+};
+
+template<>
+struct std::hash<Cell>{
+    size_t operator()(const Cell& cell){
+        return std::hash<decltype(cell.data)>()(cell.data);
+    }
 };
 
 #endif
