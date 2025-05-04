@@ -1,7 +1,7 @@
 #include "db/cell.h"
 #include "db/exceptions.h"
+#include "helper/overload.h"
 
-#include <cmath>
 #include <sstream>
 #include <utility>
 
@@ -37,9 +37,6 @@ std::pair<Cell, Cell> Cell::promote_to_common(const Cell& left, const Cell& righ
     
     return {left.convert(type), right.convert(type)};
 }
-
-template<class... Ts>
-struct overload : Ts... { using Ts::operator()...; };
 
 Cell::DataType Cell::type() const {
     return std::visit(
@@ -128,4 +125,64 @@ Cell Cell::convert_to_string() const {
         },
         data
     );
+}
+
+Cell Cell::operator+(const Cell& other) const {
+    return binary_op<std::plus<>>(other);
+}
+
+Cell Cell::operator-(const Cell& other) const {
+    return binary_op<std::minus<>>(other);
+}
+
+Cell Cell::operator*(const Cell& other) const {
+    return binary_op<std::multiplies<>>(other);
+}
+
+Cell Cell::operator/(const Cell& other) const {
+    return binary_op<std::divides<>>(other);
+}
+
+Cell Cell::operator+=(const Cell& other) {
+    *this = *this + other;
+    return *this;
+}
+
+Cell Cell::operator-=(const Cell& other) {
+    *this = *this - other;
+    return *this;
+}
+
+Cell Cell::operator*=(const Cell& other) {
+    *this = *this * other;
+    return *this;
+}
+
+Cell Cell::operator/=(const Cell& other) {
+    *this = *this / other;
+    return *this;
+}
+
+bool Cell::operator==(const Cell& other) const{
+    return predicate<std::equal_to<>>(other);
+}
+
+bool Cell::operator!=(const Cell& other) const{
+    return predicate<std::not_equal_to<>>(other);
+}
+
+bool Cell::operator<(const Cell& other) const{
+    return predicate<std::less<>>(other);
+}
+
+bool Cell::operator>(const Cell& other) const{
+    return predicate<std::greater<>>(other);
+}
+
+bool Cell::operator<=(const Cell& other) const{
+    return predicate<std::less_equal<>>(other);
+}
+
+bool Cell::operator>=(const Cell& other) const{
+    return predicate<std::greater_equal<>>(other);
 }

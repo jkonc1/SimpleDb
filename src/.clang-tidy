@@ -7,6 +7,6 @@ Checks: >
   -cppcoreguidelines-narrowing-conversions,
   -readability-identifier-length,
   -readability-implicit-bool-conversion,
-  -performance-avoid-endl
+  -performance-avoid-endl,
   -performance-enum-size
 FormatStyle: file

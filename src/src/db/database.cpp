@@ -1,6 +1,7 @@
 #include "db/database.h"
 #include "db/exceptions.h"
 #include "parse/type.h"
+#include "helper/read_array.h"
 
 #include <mutex>
 
@@ -79,27 +80,6 @@ std::string Database::_process_query(const std::string& query){
     throw InvalidQuery("Unknown query type");
 }
 
-std::vector<std::string> read_parenthesized_array(TokenStream& stream){
-    std::vector<std::string> result;
-    
-    stream.ignore_token("(");
-    
-    while(true){
-        auto value = stream.get_token();
-        result.push_back(value.value);
-        
-        if(stream.peek_token().value == ")"){
-            break;
-        }
-        
-        stream.ignore_token(",");
-    }
-    
-    stream.ignore_token(")");
-    
-    return result;
-}
-
 std::string Database::process_drop_table(TokenStream& stream){
     stream.ignore_token("DROP");
     stream.ignore_token("TABLE");
@@ -163,7 +143,17 @@ std::string Database::process_insert(TokenStream& stream){
     std::vector<std::string> column_names;
     
     if(stream.peek_token().value == "("){
-        column_names = read_parenthesized_array(stream);
+        stream.ignore_token("(");
+        auto column_name_tokens = read_array(stream);
+        
+        for(const auto& token : column_name_tokens){
+            if(token.type != TokenType::Identifier){
+                throw InvalidQuery("Invalid column name");
+            }
+            column_names.push_back(token.value);
+        }
+        
+        stream.ignore_token(")");
     }
     else{
         for(const auto& column : table.get_columns()){
@@ -173,12 +163,16 @@ std::string Database::process_insert(TokenStream& stream){
     
     stream.ignore_token("VALUES");
     
-    std::vector<std::string> values = read_parenthesized_array(stream);
+    stream.ignore_token("(");
+    
+    std::vector<Token> values = read_array(stream);
+    
+    stream.ignore_token(")");
     
     std::map<std::string, std::string> column_value_map;
     
     for(size_t i = 0; i < column_names.size(); ++i){
-        column_value_map[column_names[i]] = values[i];
+        column_value_map[column_names[i]] = values[i].value;
     }
     
     table.add_row(column_value_map);

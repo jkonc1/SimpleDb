@@ -135,7 +135,16 @@ Token TokenStream::get_identifier() {
 }
 
 Token TokenStream::get_special_char(){
-    return {TokenType::SpecialChar, std::string(1, get())};
+    std::string result = std::string(1, get());
+    
+    if((result == "<" || result == ">") && peek() == '='){
+        result += get();
+    }
+    if(result == "<" && peek() == '>'){
+        result += get();
+    }
+    
+    return {TokenType::SpecialChar, result};
 }
 
 void TokenStream::ignore_token(const Token& token) {
@@ -156,6 +165,28 @@ void TokenStream::ignore_token(const std::string& token) {
     }
     
     get_token();
+}
+
+bool TokenStream::try_ignore_token(const Token& token) {
+    Token next = peek_token();
+    
+    if(token != next){
+        return false;
+    }
+    
+    get_token();
+    return true;
+}
+
+bool TokenStream::try_ignore_token(const std::string& token) {
+    Token next = peek_token();
+    
+    if(!next.like(token)){
+        return false;
+    }
+    
+    get_token();
+    return true;
 }
 
 void TokenStream::assert_end() {

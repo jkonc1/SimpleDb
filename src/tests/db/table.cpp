@@ -6,7 +6,7 @@
 #include <vector>
 
 
-std::string serialized = 
+const std::string serialized = 
 "Name,Age,Weight,Gender,\n"
 "STRING,INT,FLOAT,CHAR,\n"
 "John,\\x,0.500000,M,\n"
