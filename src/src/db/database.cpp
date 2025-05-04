@@ -2,6 +2,8 @@
 #include "db/exceptions.h"
 #include "parse/type.h"
 #include "helper/read_array.h"
+#include "db/variable_list.h"
+#include "db/table_serialization.h"
 
 #include <mutex>
 
@@ -42,7 +44,7 @@ std::string Database::process_query(const std::string& query) noexcept{
     bool success = true;
     std::string message;
     try {
-        message = _process_query(query);
+        message = process_query_make_stream(query);
     }
     catch (const std::exception& e) {
         success = false;
@@ -52,8 +54,17 @@ std::string Database::process_query(const std::string& query) noexcept{
     return make_response(success, message);
 }
 
-std::string Database::_process_query(const std::string& query){
+std::string Database::process_query_make_stream(const std::string& query){
     TokenStream stream(query);
+    
+    auto result = process_query_pick_type(stream);
+    
+    stream.assert_end();
+    
+    return result;
+}
+
+std::string Database::process_query_pick_type(TokenStream& stream){
     
     Token command = stream.peek_token();
     
@@ -180,5 +191,103 @@ std::string Database::process_insert(TokenStream& stream){
     return make_response(true, "Row inserted into table " + table_name);
 }
 
-std::string Database::process_select(TokenStream&){ throw std::runtime_error("Not implemented");}; //NOLINT not implemented
-std::string Database::process_delete(TokenStream&){ throw std::runtime_error("Not implemented");}; //NOLINT not implemented
+Table Database::evaluate_select(TokenStream& stream, const VariableList& variables = {}){
+    stream.ignore_token("SELECT");
+    
+    bool distinct = stream.try_ignore_token("DISTINCT");
+    
+    stream.ignore_token("ALL");
+    
+    std::string result_part;
+    
+    while(true){
+        Token token = stream.get_token();
+        
+        if(token.like("FROM") || token.type == TokenType::Empty){
+            break;
+        }
+        
+        result_part += token.value;
+    }
+    
+    std::vector<std::pair<const Table&, std::string>> taken_tables;
+    
+    while(true){
+        std::string table_name = stream.get_token(TokenType::Identifier);
+        
+        auto next_token = stream.peek_token();
+        
+        std::string alias;
+        
+        if(next_token.type == TokenType::Identifier && !next_token.like("WHERE")){
+            alias = stream.get_token().value;
+        }
+        else{
+            alias = table_name;
+        }
+        
+        const Table& table = get_table(table_name);
+        
+        taken_tables.emplace_back(table, alias);
+    }
+    
+    Table combined_table = Table::cross_product(taken_tables);
+    
+    if(stream.try_ignore_token("WHERE")){
+        // TODO negate
+        combined_table.filter_by_condition(stream, variables);
+    }
+    
+    std::vector<Table> groups;
+    
+    if(stream.try_ignore_token("GROUP")){
+        stream.ignore_token("BY");
+        
+        std::vector<std::string> grouping_columns;
+        
+        while(true){
+            std::string column_name = stream.get_token(TokenType::Identifier);
+            
+            grouping_columns.push_back(column_name);
+            
+            if(!stream.try_ignore_token(",")){
+                break;
+            }
+        }
+        
+        groups=combined_table.group_by(grouping_columns);
+    }
+    else{
+        groups.push_back(std::move(combined_table));
+    }
+    
+    // TODO having
+    // probaby set the grouping columns as parent variables and do aggregate evaluation
+    
+    
+};
+
+std::string Database::process_select(TokenStream& stream){
+    Table table = evaluate_select(stream);
+    stream.ignore_token(";");
+    
+    std::ostringstream response;
+    
+    serialize_table(table, response);
+    
+    return response.str();
+}
+
+std::string Database::process_delete(TokenStream& stream){
+    stream.ignore_token("DELETE");
+    
+    stream.ignore_token("FROM");
+    
+    std::string table_name = stream.get_token(TokenType::Identifier);
+    
+    stream.ignore_token("WHERE");
+    
+    get_table(table_name).filter_by_condition(stream, {});
+    
+    return "Rows deleted from table " + table_name;
+};

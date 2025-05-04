@@ -1,10 +1,13 @@
 #include "db/table.h"
 #include "db/exceptions.h"
 #include "db/expression.h"
+#include "db/variable_list.h"
 #include "parse/token_to_cell.h"
 #include "helper/read_array.h"
 #include "helper/like.h"
 
+#include <cassert>
+#include <mutex>
 #include <ranges>
 #include <set>
 #include <algorithm>
@@ -16,8 +19,8 @@ TableHeader::TableHeader(std::vector<std::string> column_names, std::vector<Cell
         throw std::runtime_error("Column count mismatch");
     }
     
-    for(auto&& [column_name, column_type] : std::views::zip(column_names, column_types)){
-        ColumnDescriptor column(column_name, column_type);
+    for(auto&& [column_name, column_type, index] : std::views::zip(column_names, column_types, std::views::iota((size_t)0))){
+        ColumnDescriptor column = {.alias = "", .name = column_name, .type = column_type, .index=index};
         
         columns.push_back(column);
         
@@ -29,22 +32,39 @@ TableHeader TableHeader::join(const TableHeader& left, const TableHeader& right)
     return TableHeader(left, right);
 }
 
-size_t TableHeader::get_column_index(const std::string& name) const {
-    if(!column_to_index.contains(name)){
-        throw std::runtime_error("Column '" + name + "' does not exist");
+TableHeader TableHeader::add_alias(const std::string& alias) const {
+    TableHeader header(*this);
+    
+    for(auto& column : header.columns){
+        column.alias = alias;
     }
-    return column_to_index.at(name);
+    
+    return header;
+}
+
+std::optional<ColumnDescriptor> TableHeader::get_column_info(const std::string& name) const {
+    if(!column_to_index.contains(name)){
+        return std::nullopt;
+    }
+    
+    size_t index = column_to_index.at(name);
+    
+    return columns[index];
 }
 
 TableHeader::TableHeader(const TableHeader& left, const TableHeader& right) :
     columns(left.columns), column_to_index(left.column_to_index){
     
-    for(auto&& [column_name, column_type] : right.columns){
-        ColumnDescriptor column(column_name, column_type);
+    for(auto&& column : right.columns){
+        ColumnDescriptor column_copy(column);
         
-        columns.push_back(column);
+        size_t index = columns.size() - 1;
         
-        column_to_index[column_name] = columns.size() - 1;
+        column_copy.index = index;
+        
+        columns.push_back(column_copy);
+        
+        column_to_index[column_copy.name] = index;
     }
 }
 
@@ -96,14 +116,29 @@ void Table::add_row(const std::map<std::string, std::string>& values){
     add_row(header.create_row(values));
 }
 
-Table Table::full_join(const Table& left, const Table& right){
-    Table result(TableHeader::join(left.header, right.header));
+Table Table::cross_product(std::vector<std::pair<const Table&, std::string>> tables){
+    assert(!tables.empty());
     
-    std::vector<TableRow> rows;
-    for(const auto& left_row : left.rows){
-        for(const auto& right_row : right.rows){
-            rows.push_back(join_rows(left_row, right_row));
+    TableHeader header = tables[0].first.header.add_alias(tables[0].second);
+    std::vector<TableRow> rows = tables[0].first.rows;
+    
+    for(auto& [table, alias] : tables | std::views::drop(1)){
+        std::vector<TableRow> new_rows;
+        for(const auto& row1 : rows){
+            for(const auto& row2 : table.rows){
+                std::vector<Cell> combined = row1;
+                combined.append_range(row2);
+                new_rows.push_back(combined);
+            }
         }
+        header = TableHeader::join(header, table.header.add_alias(alias));
+        rows = std::move(new_rows);
+    }
+    
+    Table result(std::move(header));
+    
+    for(const auto& row : rows){
+        result.add_row(row);
     }
     
     return result;
@@ -122,7 +157,7 @@ static std::vector<Cell> get_distinct(const std::vector<Cell>& values){
     return std::vector<Cell>(values_set.begin(), values_set.end());
 }
 
-std::unique_ptr<ExpressionNode> Table::parse_primary_expression(TokenStream& stream) const {
+std::unique_ptr<ExpressionNode> Table::parse_primary_expression(TokenStream& stream, const VariableList& variables) const {
     auto next_token = stream.get_token();
     
     if(next_token.type != TokenType::Identifier){
@@ -147,7 +182,7 @@ std::unique_ptr<ExpressionNode> Table::parse_primary_expression(TokenStream& str
         
         bool is_distinct = stream.try_ignore_token("DISTINCT");
         
-        auto values = evaluate_expression(stream);
+        auto values = evaluate_expression(stream, variables);
         
         stream.ignore_token(")");
         
@@ -187,8 +222,8 @@ std::unique_ptr<ExpressionNode> Table::parse_primary_expression(TokenStream& str
     return std::make_unique<VariableNode>(next_token.value);
 }
 
-std::unique_ptr<ExpressionNode> Table::parse_multiplicative_expression(TokenStream& stream) const {
-    auto result = parse_primary_expression(stream);
+std::unique_ptr<ExpressionNode> Table::parse_multiplicative_expression(TokenStream& stream, const VariableList& variables) const {
+    auto result = parse_primary_expression(stream, variables);
     
     while(true){
         auto next_token = stream.peek_token();
@@ -199,7 +234,7 @@ std::unique_ptr<ExpressionNode> Table::parse_multiplicative_expression(TokenStre
         
         stream.ignore_token(next_token);
         
-        auto next_expression = parse_primary_expression(stream);
+        auto next_expression = parse_primary_expression(stream, variables);
         
         if(next_token.value == "*"){
             result = std::make_unique<MultiplicationNode>(std::move(result), std::move(next_expression));
@@ -211,8 +246,8 @@ std::unique_ptr<ExpressionNode> Table::parse_multiplicative_expression(TokenStre
     return result;
 }
 
-std::unique_ptr<ExpressionNode> Table::parse_additive_expression(TokenStream& stream) const {
-    auto result = parse_multiplicative_expression(stream);
+std::unique_ptr<ExpressionNode> Table::parse_additive_expression(TokenStream& stream, const VariableList& variables) const {
+    auto result = parse_multiplicative_expression(stream, variables);
     
     // cannot be parsed recursively because of left-to right operation order
     while(true){
@@ -224,7 +259,7 @@ std::unique_ptr<ExpressionNode> Table::parse_additive_expression(TokenStream& st
         
         stream.ignore_token(next_token);
         
-        auto next_expression = parse_multiplicative_expression(stream);
+        auto next_expression = parse_multiplicative_expression(stream, variables);
         
         if(next_token.value == "-"){
             result = std::make_unique<SubtractionNode>(std::move(result), std::move(next_expression));
@@ -236,27 +271,21 @@ std::unique_ptr<ExpressionNode> Table::parse_additive_expression(TokenStream& st
     return result;
 }
 
-std::vector<Cell> Table::evaluate_expression(TokenStream& stream) const{
-    auto tree = parse_additive_expression(stream);
+std::vector<Cell> Table::evaluate_expression(TokenStream& stream, const VariableList& variables) const{
+    auto tree = parse_additive_expression(stream, variables);
     
     std::vector<Cell> result;
     for(const auto& row : rows){
-        RowReference row_ref(header, row);
+        BoundRow row_ref(header, row);
         
-        result.push_back(tree->evaluate(row_ref));
+        auto new_variables = variables + row_ref;
+        
+        result.push_back(tree->evaluate(new_variables));
     }
     
     return result;
 }
 
-RowReference::RowReference(const TableHeader& header, const TableRow& row)
-    : header(header), row(row) {}
-
-const Cell& RowReference::operator[](const std::string& name) const{
-    size_t index = header.get_column_index(name);
-    
-    return row[index];
-}
 
 static std::vector<bool> negate(const std::vector<bool>& values){
     std::vector<bool> result;
@@ -266,7 +295,7 @@ static std::vector<bool> negate(const std::vector<bool>& values){
     return result;
 }
 
-std::vector<bool> Table::evaluate_primary_condition(TokenStream& stream) const{
+std::vector<bool> Table::evaluate_primary_condition(TokenStream& stream, const VariableList& variables) const{
     if(stream.try_ignore_token("EXISTS")){
         stream.ignore_token("(");
         
@@ -278,7 +307,7 @@ std::vector<bool> Table::evaluate_primary_condition(TokenStream& stream) const{
     }
     
     if(stream.try_ignore_token("(")){
-        auto values = evaluate_expression(stream);
+        auto values = evaluate_expression(stream, variables);
         
         stream.ignore_token(")");
         stream.ignore_token("IS");
@@ -294,7 +323,7 @@ std::vector<bool> Table::evaluate_primary_condition(TokenStream& stream) const{
         return std::vector(result.begin(), result.end());
     }
     
-    auto expr = evaluate_expression(stream);
+    auto expr = evaluate_expression(stream, variables);
     
     bool negated = stream.try_ignore_token("NOT");
     
@@ -348,16 +377,16 @@ std::vector<bool> Table::evaluate_primary_condition(TokenStream& stream) const{
     }
     
     if(stream.try_ignore_token("BETWEEN")){
-        auto left_side = evaluate_expression(stream);
+        auto left_side = evaluate_expression(stream, variables);
         
         stream.ignore_token("AND");
         
-        auto right_side = evaluate_expression(stream);
+        auto right_side = evaluate_expression(stream, variables);
         
         auto result = std::views::zip(expr,left_side,right_side) | std::views::transform([negated](const Cell& left, const Cell& middle, const Cell& right){
             bool left_boundary = left <= middle;
             bool right_boundary = middle <= right;
-            return left_boundary && right_boundary == !negated;
+            return (left_boundary && right_boundary) == !negated;
         });
         
         return std::vector(result.begin(), result.end());
@@ -370,7 +399,11 @@ std::vector<bool> Table::evaluate_primary_condition(TokenStream& stream) const{
     
     std::map<std::string, std::function<bool(const Cell&, const Cell&)>> operator_to_comparator = {{"<", std::less<Cell>()}, {"=", std::equal_to<Cell>()}, {">", std::greater<Cell>()}, {"<=", std::less_equal<Cell>()}, {">=", std::greater_equal<Cell>()}, {"<>", std::not_equal_to<Cell>()}};
     
-    auto comparator = operator_to_comparator[oper];
+    if(!operator_to_comparator.contains(oper.value)){
+        throw InvalidQuery("Invalid operator " + oper.value);
+    }
+    
+    auto comparator = operator_to_comparator.at(oper.value);
     
     bool has_any = stream.try_ignore_token("ANY");
     bool has_all = stream.try_ignore_token("ALL");
@@ -417,7 +450,7 @@ std::vector<bool> Table::evaluate_primary_condition(TokenStream& stream) const{
     
     // here we just compare against an expression
     
-    auto right_expression = evaluate_expression(stream);
+    auto right_expression = evaluate_expression(stream, variables);
     
     std::vector<bool> result;
     
@@ -428,11 +461,11 @@ std::vector<bool> Table::evaluate_primary_condition(TokenStream& stream) const{
     return result;
 }
 
-std::vector<bool> Table::evaluate_conjunctive_condition(TokenStream& stream) const{
-    auto result = evaluate_primary_condition(stream);
+std::vector<bool> Table::evaluate_conjunctive_condition(TokenStream& stream, const VariableList& variables) const{
+    auto result = evaluate_primary_condition(stream, variables);
     
     while(stream.try_ignore_token("AND")){
-        auto right = evaluate_primary_condition(stream);
+        auto right = evaluate_primary_condition(stream, variables);
         
         for(auto&& field : result){
             field = field && right[field];
@@ -442,11 +475,11 @@ std::vector<bool> Table::evaluate_conjunctive_condition(TokenStream& stream) con
     return result;
 }
 
-std::vector<bool> Table::evaluate_disjunctive_condition(TokenStream& stream) const{
-    auto result = evaluate_conjunctive_condition(stream);
+std::vector<bool> Table::evaluate_disjunctive_condition(TokenStream& stream, const VariableList& variables) const{
+    auto result = evaluate_conjunctive_condition(stream, variables);
     
     while(stream.try_ignore_token("OR")){
-        auto right = evaluate_primary_condition(stream);
+        auto right = evaluate_primary_condition(stream, variables);
         
         for(auto&& field : result){
             field = field || right[field];
@@ -456,6 +489,22 @@ std::vector<bool> Table::evaluate_disjunctive_condition(TokenStream& stream) con
     return result;
 }
 
-std::vector<bool> Table::evaluate_condition(TokenStream& stream) const{
-    return evaluate_disjunctive_condition(stream);
+std::vector<bool> Table::evaluate_condition(TokenStream& stream, const VariableList& variables) const{
+    return evaluate_disjunctive_condition(stream, variables);
+}
+
+void Table::filter_by_condition(TokenStream& stream, const VariableList& variables){
+    auto lock = std::unique_lock(mutex);
+    
+    auto condition = evaluate_condition(stream, variables);
+    
+    std::vector<TableRow> new_rows;
+    
+    for(size_t i = 0; i < rows.size(); ++i){
+        if(condition[i]){
+            new_rows.push_back(std::move(rows[i]));
+        }
+    }
+    
+    rows = std::move(new_rows);
 }

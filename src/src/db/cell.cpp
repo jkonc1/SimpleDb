@@ -13,27 +13,27 @@ std::optional<std::string> Cell::repr() const {
     return std::get<std::string>(convert(DataType::String).data);
 }
 
-std::pair<Cell, Cell> Cell::promote_to_common(const Cell& left, const Cell& right) {
+Cell::DataType Cell::get_common_type(DataType left, DataType right){
     // the promotion order is int -> float -> string -> null
     // char -> string
     
-    Cell::DataType type = DataType::Null;
-    
-    if(left.type() == right.type()){
-        type = left.type();
+    if(left == right){
+        return left;
     }
-    else if(left.type() == DataType::Null || right.type() == DataType::Null){
-        type = DataType::Null;
+    if(left == DataType::Null || right == DataType::Null){
+        return DataType::Null;
     }
-    else if(left.type() == DataType::Int && right.type() == DataType::Float){
-        type = DataType::Float;
+    if(left == DataType::Int && right == DataType::Float){
+        return DataType::Float;
     }
-    else if(left.type() == DataType::Float && right.type() == DataType::Int){
-        type = DataType::Float;
+    if(left == DataType::Float && right == DataType::Int){
+        return DataType::Float;
     }
-    else{
-        type = DataType::String;
-    }
+    return DataType::String;
+}
+
+std::pair<Cell, Cell> Cell::promote_to_common(const Cell& left, const Cell& right) {
+    Cell::DataType type = get_common_type(left.type(), right.type());
     
     return {left.convert(type), right.convert(type)};
 }
@@ -185,4 +185,8 @@ bool Cell::operator<=(const Cell& other) const{
 
 bool Cell::operator>=(const Cell& other) const{
     return predicate<std::greater_equal<>>(other);
+}
+
+bool Cell::is_identical(const Cell& left, const Cell& right){
+    return left.data == right.data;
 }

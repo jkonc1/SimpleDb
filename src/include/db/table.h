@@ -16,8 +16,10 @@ using TableRow = std::vector<Cell>;
 class Table;
 
 struct ColumnDescriptor{
+    std::string alias;
     std::string name;
     Cell::DataType type;
+    size_t index;
 };
 
 class TableHeader{
@@ -28,8 +30,12 @@ public:
     const std::vector<ColumnDescriptor>& get_columns() const;
     
     size_t column_count() const { return columns.size(); }
-    size_t get_column_index(const std::string& name) const;
+    
+    std::optional<ColumnDescriptor> get_column_info(const std::string& name) const;
+    
     std::vector<Cell> create_row(const std::map<std::string, std::string>& data) const;
+    
+    TableHeader add_alias(const std::string& alias) const;
     
     static TableHeader join(const TableHeader& left, const TableHeader& right);
     
@@ -41,16 +47,7 @@ private:
     std::map<std::string, size_t> column_to_index;
 };
 
-class RowReference{
-public:
-    RowReference(const TableHeader& header, const TableRow& row);
-    
-    const Cell& operator[](const std::string& name) const;
-        
-private:
-    const TableHeader& header;
-    const TableRow& row;
-};
+class VariableList;
 
 class Table{
 public:
@@ -58,12 +55,14 @@ public:
     Table(const std::vector<std::string>& column_names, const std::vector<Cell::DataType>& column_types);
     
     Table(Table&& other) noexcept;
+    
+    void filter_by_condition(TokenStream& stream, const VariableList& variables);
 
     void add_row(const std::map<std::string, std::string>& values);
     
     const std::vector<ColumnDescriptor>& get_columns() const;
 
-    static Table full_join(const Table& left, const Table& right);
+    static Table cross_product(std::vector<std::pair<const Table&, std::string>> tables);
 private:
     TableHeader header;
     std::vector<TableRow> rows;
@@ -74,16 +73,16 @@ private:
         return rows.size();
     }
     
-    std::vector<Cell> evaluate_expression(TokenStream& stream) const;
+    std::vector<Cell> evaluate_expression(TokenStream& stream, const VariableList& variables) const;
     
-    std::unique_ptr<ExpressionNode> parse_additive_expression(TokenStream& stream) const;
-    std::unique_ptr<ExpressionNode> parse_multiplicative_expression(TokenStream& stream) const;
-    std::unique_ptr<ExpressionNode> parse_primary_expression(TokenStream& stream) const;
+    std::unique_ptr<ExpressionNode> parse_additive_expression(TokenStream& stream, const VariableList& variables) const;
+    std::unique_ptr<ExpressionNode> parse_multiplicative_expression(TokenStream& stream, const VariableList& variables) const;
+    std::unique_ptr<ExpressionNode> parse_primary_expression(TokenStream& stream, const VariableList& variables) const;
     
-    std::vector<bool> evaluate_condition(TokenStream& stream) const;
-    std::vector<bool> evaluate_conjunctive_condition(TokenStream& stream) const;
-    std::vector<bool> evaluate_disjunctive_condition(TokenStream& stream) const;
-    std::vector<bool> evaluate_primary_condition(TokenStream& stream) const;
+    std::vector<bool> evaluate_condition(TokenStream& stream, const VariableList& variables) const;
+    std::vector<bool> evaluate_conjunctive_condition(TokenStream& stream, const VariableList& variables) const;
+    std::vector<bool> evaluate_disjunctive_condition(TokenStream& stream, const VariableList& variables) const;
+    std::vector<bool> evaluate_primary_condition(TokenStream& stream, const VariableList& variables) const;
         
     mutable std::shared_mutex mutex;
     

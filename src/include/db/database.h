@@ -18,7 +18,10 @@ private:
     void add_table(const std::string& name, Table table);
     void remove_table(const std::string& name);
     
-    std::string _process_query(const std::string& query);
+    std::string process_query_pick_type(TokenStream& stream);
+    std::string process_query_make_stream(const std::string& query);
+    
+    Table evaluate_select(TokenStream& stream, const VariableList& variables);
     
     std::string process_create_table(TokenStream& stream);
     std::string process_drop_table(TokenStream& stream);
