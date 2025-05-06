@@ -40,7 +40,6 @@ public:
     const Token& peek_token();
     const std::string& peek_token(TokenType type);
     
-    void ignore_token();
     void ignore_token(const Token& token);
     void ignore_token(const std::string& token);
     

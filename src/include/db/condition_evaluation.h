@@ -1,0 +1,39 @@
+#ifndef CONDITION_EVALUATION_H
+#define CONDITION_EVALUATION_H
+
+#include "db/table.h"
+#include "db/variable_list.h"
+
+#include <vector>
+#include <functional>
+#include <valarray>
+
+class ConditionEvaluation{
+public:
+    ConditionEvaluation(const Table& table, TokenStream& stream, const VariableList& variables, 
+        std::function<Table(TokenStream&, const VariableList&)>& select_callback) : 
+            table(table), stream(stream), variables(variables), select_callback(select_callback) {}
+        
+    BoolVector evaluate();
+private:
+    const Table& table;
+    TokenStream& stream;
+    const VariableList& variables;
+    std::function<Table(TokenStream&, const VariableList&)>& select_callback;
+    
+    BoolVector evaluate_conjunctive_condition();
+    BoolVector evaluate_disjunctive_condition();
+    BoolVector evaluate_primary_condition();
+        
+    Table process_select_single_row(const BoundRow& extra_vars);
+    
+    std::vector<Table> process_select();
+    
+    CellVector process_select_singles();
+    std::vector<std::vector<Cell>> process_select_vectors();
+    
+    const Cell& extract_single_cell(const Table& table);
+    std::vector<Cell> extract_vector(const Table& table);
+};
+
+#endif

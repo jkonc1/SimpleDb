@@ -194,7 +194,7 @@ std::string Database::process_insert(TokenStream& stream){
 Table Database::evaluate_select(TokenStream& stream, const VariableList& variables = {}){
     stream.ignore_token("SELECT");
     
-    bool distinct = stream.try_ignore_token("DISTINCT");
+    [[maybe_unused]] bool distinct = stream.try_ignore_token("DISTINCT");
     
     stream.ignore_token("ALL");
     
@@ -234,8 +234,11 @@ Table Database::evaluate_select(TokenStream& stream, const VariableList& variabl
     Table combined_table = Table::cross_product(taken_tables);
     
     if(stream.try_ignore_token("WHERE")){
-        // TODO negate
-        combined_table.filter_by_condition(stream, variables);
+        auto select_callback = [this](TokenStream& stream, const VariableList& variables){
+            return this->evaluate_select(stream, variables);
+        };
+        
+        combined_table.filter_by_condition(stream, variables, select_callback);
     }
     
     std::vector<Table> groups;
@@ -287,7 +290,11 @@ std::string Database::process_delete(TokenStream& stream){
     
     stream.ignore_token("WHERE");
     
-    get_table(table_name).filter_by_condition(stream, {});
+    auto select_callback = [this](TokenStream& stream, const VariableList& variables){
+        return this->evaluate_select(stream, variables);
+    };
+    
+    get_table(table_name).filter_by_condition(stream, {}, select_callback);
     
     return "Rows deleted from table " + table_name;
 };

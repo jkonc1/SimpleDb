@@ -1,4 +1,5 @@
 #include "db/table.h"
+#include "db/condition_evaluation.h"
 #include "db/exceptions.h"
 #include "db/expression.h"
 #include "db/variable_list.h"
@@ -58,7 +59,7 @@ TableHeader::TableHeader(const TableHeader& left, const TableHeader& right) :
     for(auto&& column : right.columns){
         ColumnDescriptor column_copy(column);
         
-        size_t index = columns.size() - 1;
+        size_t index = columns.size();
         
         column_copy.index = index;
         
@@ -152,9 +153,14 @@ const std::vector<ColumnDescriptor>& TableHeader::get_columns() const{
     return columns;
 }
 
-static std::vector<Cell> get_distinct(const std::vector<Cell>& values){
-    std::set<Cell> values_set(values.begin(), values.end());
-    return std::vector<Cell>(values_set.begin(), values_set.end());
+static CellVector get_distinct(const CellVector& values){
+    std::set<Cell> values_set(std::begin(values), std::end(values));
+    
+    CellVector result(values_set.size());
+    
+    std::copy(std::begin(values_set), std::end(values_set), std::begin(result));
+    
+    return result;
 }
 
 std::unique_ptr<ExpressionNode> Table::parse_primary_expression(TokenStream& stream, const VariableList& variables) const {
@@ -196,9 +202,9 @@ std::unique_ptr<ExpressionNode> Table::parse_primary_expression(TokenStream& str
         Cell value;
         
         if(next_token.like("MAX")){
-            value = *std::max_element(values.begin(), values.end());
+            value = values.max();
         } else if(next_token.like("MIN")){
-            value = *std::min_element(values.begin(), values.end());
+            value = values.min();
         }
         else{
             // sum type
@@ -271,237 +277,36 @@ std::unique_ptr<ExpressionNode> Table::parse_additive_expression(TokenStream& st
     return result;
 }
 
-std::vector<Cell> Table::evaluate_expression(TokenStream& stream, const VariableList& variables) const{
+CellVector Table::evaluate_expression(TokenStream& stream, const VariableList& variables) const{
     auto tree = parse_additive_expression(stream, variables);
     
-    std::vector<Cell> result;
-    for(const auto& row : rows){
+    CellVector result(rows.size());
+    for(size_t row_index = 0; row_index < rows.size(); ++row_index){
+        const TableRow& row = rows[row_index];
+        
         BoundRow row_ref(header, row);
         
         auto new_variables = variables + row_ref;
         
-        result.push_back(tree->evaluate(new_variables));
+        result[row_index] = tree->evaluate(new_variables);
     }
     
     return result;
 }
 
 
-static std::vector<bool> negate(const std::vector<bool>& values){
-    std::vector<bool> result;
-    for(auto value : values){
-        result.push_back(!value);
-    }
-    return result;
-}
-
-std::vector<bool> Table::evaluate_primary_condition(TokenStream& stream, const VariableList& variables) const{
-    if(stream.try_ignore_token("EXISTS")){
-        stream.ignore_token("(");
-        
-        auto result = process_select(stream);
-        
-        stream.ignore_token(")");
-        
-        return result.row_count() > 0;
-    }
-    
-    if(stream.try_ignore_token("(")){
-        auto values = evaluate_expression(stream, variables);
-        
-        stream.ignore_token(")");
-        stream.ignore_token("IS");
-        
-        bool is_negated = stream.try_ignore_token("NOT");
-        
-        stream.ignore_token("NULL");
-        
-        auto result = values | std::views::transform([is_negated](const Cell& cell){
-            return is_negated == (cell.type() != Cell::DataType::Null);
-        });
-        
-        return std::vector(result.begin(), result.end());
-    }
-    
-    auto expr = evaluate_expression(stream, variables);
-    
-    bool negated = stream.try_ignore_token("NOT");
-    
-    if(stream.try_ignore_token("LIKE")){
-        auto pattern = stream.get_token(TokenType::String);
-        
-        auto result = expr | std::views::transform([pattern, negated](const Cell& cell){
-            auto repr = cell.repr();
-            if(!repr.has_value()){
-                return false;
-            }
-            return is_like(repr.value(), pattern) == !negated;
-        });
-        
-        return std::vector(result.begin(), result.end());
-    }
-    
-    if(stream.try_ignore_token("IN")){
-        stream.ignore_token("(");
-        
-        if(stream.peek_token().like("SELECT")){
-            Table table = process_select(stream);
+void Table::filter_by_condition(TokenStream& stream, const VariableList& variables, 
+        std::function<Table(TokenStream&, const VariableList&)> select_callback) {
             
-            if(table.get_columns().size() != 1){
-                throw std::runtime_error("IN clause expects a single column");
-            }
-            
-            auto result = expr | std::views::transform([&table, negated](const Cell& cell){
-                for(auto& row : table){
-                    if(row[0] == cell){
-                        return !negated;
-                    }
-                }
-                return negated;
-            });
-            
-        }
-        
-        auto values = read_array(stream);
-        
-        auto cells = values | std::views::transform([](const Token& token){
-            return parse_token_to_cell(token);
-        });
-        
-        auto result = expr | std::views::transform([cells, negated](const Cell& cell){
-            bool found = std::find(cells.begin(), cells.end(), cell) != cells.end();
-            return found == !negated;
-        });
-        
-        return std::vector(result.begin(), result.end());
-    }
-    
-    if(stream.try_ignore_token("BETWEEN")){
-        auto left_side = evaluate_expression(stream, variables);
-        
-        stream.ignore_token("AND");
-        
-        auto right_side = evaluate_expression(stream, variables);
-        
-        auto result = std::views::zip(expr,left_side,right_side) | std::views::transform([negated](const Cell& left, const Cell& middle, const Cell& right){
-            bool left_boundary = left <= middle;
-            bool right_boundary = middle <= right;
-            return (left_boundary && right_boundary) == !negated;
-        });
-        
-        return std::vector(result.begin(), result.end());
-    }
-    
-    
-    //otherwise it must be one of the comparisions
-    
-    auto oper = stream.get_token();
-    
-    std::map<std::string, std::function<bool(const Cell&, const Cell&)>> operator_to_comparator = {{"<", std::less<Cell>()}, {"=", std::equal_to<Cell>()}, {">", std::greater<Cell>()}, {"<=", std::less_equal<Cell>()}, {">=", std::greater_equal<Cell>()}, {"<>", std::not_equal_to<Cell>()}};
-    
-    if(!operator_to_comparator.contains(oper.value)){
-        throw InvalidQuery("Invalid operator " + oper.value);
-    }
-    
-    auto comparator = operator_to_comparator.at(oper.value);
-    
-    bool has_any = stream.try_ignore_token("ANY");
-    bool has_all = stream.try_ignore_token("ALL");
-    
-    if(has_any && has_all){
-        throw InvalidQuery("Cannot use ANY and ALL together");
-    }
-    
-    if(stream.try_ignore_token("(")){
-        std::vector<bool> result;
-        
-        if(!has_all && !has_any){
-            // here the select must return a single value and we compare to it
-            // TODO fix stream copying
-           result = expr | std::views::transform([comparator, has_all, has_any, &stream](const Cell& value){
-                Cell query_result = process_single_value_query(stream);
-                return comparator(value, query_result);
-            });
-        }
-        
-        // here the select must return a vector of values and we compare each to the value
-        // TODO fix stream copying
-        else{
-            auto result = expr | std::views::transform([comparator, has_all, has_any, &stream](const Cell& value){
-                std::vector<Cell> query_results = process_vector_query(stream);
-                
-                std::vector<bool> comparisons;
-                for(const auto& query_result : query_results){
-                    comparisons.push_back(comparator(value, query_result));
-                }
-                
-                if(has_any){
-                    return std::count(comparisons.begin(), comparisons.end(), true) > 0;
-                }
-                
-                return std::count(comparisons.begin(), comparisons.end(), false) == 0;
-            });
-        }
-        
-        stream.ignore_token(")");
-        
-        return result;
-    }
-    
-    // here we just compare against an expression
-    
-    auto right_expression = evaluate_expression(stream, variables);
-    
-    std::vector<bool> result;
-    
-    for(size_t i = 0; i < expr.size(); ++i){
-        result.push_back(comparator(expr[i], right_expression[i]));
-    }
-    
-    return result;
-}
-
-std::vector<bool> Table::evaluate_conjunctive_condition(TokenStream& stream, const VariableList& variables) const{
-    auto result = evaluate_primary_condition(stream, variables);
-    
-    while(stream.try_ignore_token("AND")){
-        auto right = evaluate_primary_condition(stream, variables);
-        
-        for(auto&& field : result){
-            field = field && right[field];
-        }
-    }
-    
-    return result;
-}
-
-std::vector<bool> Table::evaluate_disjunctive_condition(TokenStream& stream, const VariableList& variables) const{
-    auto result = evaluate_conjunctive_condition(stream, variables);
-    
-    while(stream.try_ignore_token("OR")){
-        auto right = evaluate_primary_condition(stream, variables);
-        
-        for(auto&& field : result){
-            field = field || right[field];
-        }
-    }
-    
-    return result;
-}
-
-std::vector<bool> Table::evaluate_condition(TokenStream& stream, const VariableList& variables) const{
-    return evaluate_disjunctive_condition(stream, variables);
-}
-
-void Table::filter_by_condition(TokenStream& stream, const VariableList& variables){
     auto lock = std::unique_lock(mutex);
     
-    auto condition = evaluate_condition(stream, variables);
+    ConditionEvaluation evaluation(*this, stream, variables, select_callback);
+    auto condition_result = evaluation.evaluate();
     
     std::vector<TableRow> new_rows;
     
     for(size_t i = 0; i < rows.size(); ++i){
-        if(condition[i]){
+        if(condition_result[i]){
             new_rows.push_back(std::move(rows[i]));
         }
     }
