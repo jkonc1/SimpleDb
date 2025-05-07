@@ -9,9 +9,9 @@
 const std::string serialized = 
 "Name,Age,Weight,Gender,\n"
 "STRING,INT,FLOAT,CHAR,\n"
-"John,\\x,0.500000,M,\n"
+"John,\\x,0.5,M,\n"
 "Jane,30,\\x,F,\n"
-"\\x,28,4.000000,\\x,\n";
+"\\x,28,4,\\x,\n";
 
 TEST_CASE("Table") {
     std::vector<std::string> names = {"Name", "Age", "Weight", "Gender"};
