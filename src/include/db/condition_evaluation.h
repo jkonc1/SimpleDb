@@ -6,7 +6,6 @@
 
 #include <vector>
 #include <functional>
-#include <valarray>
 
 class ConditionEvaluation{
 public:
@@ -25,7 +24,7 @@ private:
     BoolVector evaluate_disjunctive_condition();
     BoolVector evaluate_primary_condition();
         
-    Table process_select_single_row(const BoundRow& extra_vars);
+    Table process_select_single_row(const std::string& statement, const BoundRow& extra_vars);
     
     std::vector<Table> process_select();
     

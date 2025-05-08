@@ -108,7 +108,6 @@ void DatabaseManager::init_directory(const std::filesystem::path& path){
 }
 
 std::filesystem::path make_temp_dir() {
-    // TODO this is not ideal since we are potentially sharing the database to all users
     std::string random_filename = std::to_string(std::random_device()());
     
     return std::filesystem::temp_directory_path() / random_filename;

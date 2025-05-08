@@ -1,6 +1,7 @@
 #ifndef CELL_H
 #define CELL_H
 
+#include "db/exceptions.h"
 #include <utility>
 #include <variant>
 #include <string>
@@ -56,11 +57,15 @@ private:
     template <class OP>
     Cell binary_op(const Cell& other) const {
         auto [left, right] = promote_to_common(*this, other);
+        if(left.type() == DataType::Null){
+            return Cell();
+        }
         
         return std::visit([&](auto&& l, auto&& r){
             if constexpr(requires { OP{}(l, r); }) {
                 return Cell(OP{}(l, r), left.type());
             } else {
+                throw InvalidQuery("Invalid conversion");
                 return Cell();
             }
         }, left.data, right.data);

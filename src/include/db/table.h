@@ -25,12 +25,14 @@ struct ColumnDescriptor{
     std::string name;
     Cell::DataType type;
     size_t index;
+    
+    bool operator==(const ColumnDescriptor& other) const = default;
 };
 
 class TableHeader{
 public:
     TableHeader(){}
-    TableHeader(std::vector<std::string> column_names, std::vector<Cell::DataType> column_types);
+    TableHeader(std::vector<std::pair<Cell::DataType, std::string>> columns);
     
     const std::vector<ColumnDescriptor>& get_columns() const;
     
@@ -49,7 +51,9 @@ private:
     
     TableHeader(const TableHeader& left, const TableHeader& right);
     
-    std::map<std::string, size_t> column_to_index;
+    void calculate_lookup_map();
+    
+    std::multimap<std::string, size_t> column_to_index;
 };
 
 class VariableList;
@@ -57,12 +61,19 @@ class VariableList;
 class Table{
 public:
     Table(TableHeader header);
-    Table(const std::vector<std::string>& column_names, const std::vector<Cell::DataType>& column_types);
+    Table(std::vector<std::pair<Cell::DataType, std::string>> columns);
     
     Table(Table&& other) noexcept;
     
     void filter_by_condition(TokenStream& stream, const VariableList& variables,
         std::function<Table(TokenStream&, const VariableList&)> select_callback);
+    
+    bool evaluate_aggregate_condition(TokenStream& stream, const VariableList& variables,
+        std::function<Table(TokenStream&, const VariableList&)> select_callback) const;
+    
+    Table project(const std::vector<std::string>& expressions, const VariableList& variables) const;
+    
+    void deduplicate();
 
     void add_row(const std::map<std::string, std::string>& values);
     
@@ -71,6 +82,8 @@ public:
     const std::vector<ColumnDescriptor>& get_columns() const;
 
     static Table cross_product(std::vector<std::pair<const Table&, std::string>> tables);
+    
+    void vertical_join(const Table& other);
 private:
     TableHeader header;
     std::vector<TableRow> rows;
@@ -81,7 +94,9 @@ private:
         return rows.size();
     }
     
-    std::valarray<Cell> evaluate_expression(TokenStream& stream, const VariableList& variables) const;
+    std::pair<Cell::DataType, CellVector> evaluate_expression(TokenStream& stream, const VariableList& variables) const;
+    BoolVector evaluate_condition(TokenStream& stream, const VariableList& variables,
+        std::function<Table(TokenStream&, const VariableList&)> select_callback) const;
     
     std::unique_ptr<ExpressionNode> parse_additive_expression(TokenStream& stream, const VariableList& variables) const;
     std::unique_ptr<ExpressionNode> parse_multiplicative_expression(TokenStream& stream, const VariableList& variables) const;

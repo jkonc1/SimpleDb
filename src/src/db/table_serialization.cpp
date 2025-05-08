@@ -55,34 +55,26 @@ Table load_table(std::istream& is){
         throw ParsingError("Invalid table data");
     }
     
-    auto column_names_opt = data[0];
-    size_t column_count = column_names_opt.size();
+    auto column_names = data[0];
+    auto column_types = data[1];
     
-    std::vector<std::string> column_names;
+    if(column_names.size() != column_types.size()){
+        throw ParsingError("Column count mismatch");
+    }
     
-    for(auto&& name : column_names_opt){
+    std::vector<std::pair<Cell::DataType, std::string>> columns;
+    
+    for(auto&& [name, type] : std::views::zip(column_names, column_types)){
         if(!name.has_value()){
             throw ParsingError("Invalid (null) column name");
         }
-        column_names.push_back(name.value());
-    }
-    
-    auto column_types_opt = data[1];
-    
-    std::vector<Cell::DataType> column_types;
-    
-    if(column_types_opt.size() != column_count){
-        throw ParsingError("Invalid column type count");
-    }
-    
-    for(auto&& type : column_types_opt){
         if(!type.has_value()){
             throw ParsingError("Invalid (null) column type");
         }
-        column_types.push_back(string_to_type(type.value()));
+        columns.emplace_back(string_to_type(type.value()), name.value());
     }
     
-    Table result(column_names, column_types);
+    Table result(columns);
     
     for(auto&& row : data | std::views::drop(2)){
         std::map<std::string, std::string> assignments;
@@ -91,7 +83,7 @@ Table load_table(std::istream& is){
             if(!value.has_value()) {
                 continue;
             }
-            assignments.emplace(column_names[index], value.value());
+            assignments.emplace(column_names[index].value(), value.value());
         }
         
         result.add_row(assignments);
@@ -111,7 +103,6 @@ VoidableRow dump_row(const TableRow& row){
 }
 
 void serialize_table(const Table& table, std::ostream& os) {
-    // TODO this probably shouldn't be a friend in the long run
     VoidableTable result;
     
     VoidableRow names_row;

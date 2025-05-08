@@ -3,7 +3,6 @@
 
 #include "db/table.h"
 
-// TODO maybe move to table.h?
 struct BoundRow {
     BoundRow(const TableHeader& header, const TableRow& row);
     

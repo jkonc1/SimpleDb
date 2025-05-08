@@ -21,6 +21,9 @@ struct Token{
     }
     
     bool like(const std::string& what) const{
+        if(value.size() != what.size()) {
+            return false;
+        }
         for (size_t i = 0; i < value.size(); ++i) {
             if (tolower(value[i]) != tolower(what[i])) {
                 return false;

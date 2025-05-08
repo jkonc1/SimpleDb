@@ -17,9 +17,6 @@ Cell::DataType Cell::get_common_type(DataType left, DataType right){
     // the promotion order is int -> float -> string -> null
     // char -> string
     
-    if(left == right){
-        return left;
-    }
     if(left == DataType::Null || right == DataType::Null){
         return DataType::Null;
     }
@@ -28,6 +25,10 @@ Cell::DataType Cell::get_common_type(DataType left, DataType right){
     }
     if(left == DataType::Float && right == DataType::Int){
         return DataType::Float;
+    }
+    if(left == right && left != DataType::Char){
+        // char must always be promoted
+        return left;
     }
     return DataType::String;
 }
@@ -77,6 +78,11 @@ T string_to(const std::string& value) {
     return result;
 }
 
+template<class T>
+std::string my_to_string(const T& value){
+    return std::format("{}", value);
+}
+
 Cell Cell::convert_to_int() const {
     return std::visit(
         overload{
@@ -117,8 +123,8 @@ Cell Cell::convert_to_char() const {
 Cell Cell::convert_to_string() const {
     return std::visit(
         overload{
-            [](const int& value){ return Cell(std::to_string(value)); },
-            [](const float& value){ return Cell(std::to_string(value)); },
+            [](const int& value){ return Cell(my_to_string(value)); },
+            [](const float& value){ return Cell(my_to_string(value)); },
             [](const std::string& value){ return Cell(value); },
             [](const char& value){ return Cell(std::string(1, value)); },
             [](const std::monostate&){ return Cell(); }

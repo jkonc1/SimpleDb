@@ -31,7 +31,7 @@ BoolVector ConditionEvaluation::evaluate_primary_condition(){
     }
     
     if(stream.try_ignore_token("(")){
-        auto values = table.evaluate_expression(stream, variables);
+        auto [type, values] = table.evaluate_expression(stream, variables);
         
         stream.ignore_token(")");
         stream.ignore_token("IS");
@@ -51,7 +51,7 @@ BoolVector ConditionEvaluation::evaluate_primary_condition(){
         return result;
     }
     
-    auto expr = table.evaluate_expression(stream, variables);
+    auto [expr_type, expr] = table.evaluate_expression(stream, variables);
     
     bool negated = stream.try_ignore_token("NOT");
     
@@ -107,11 +107,11 @@ BoolVector ConditionEvaluation::evaluate_primary_condition(){
     }
     
     if(stream.try_ignore_token("BETWEEN")){
-        auto left_side = table.evaluate_expression(stream, variables);
+        auto [left_type, left_side] = table.evaluate_expression(stream, variables);
         
         stream.ignore_token("AND");
         
-        auto right_side = table.evaluate_expression(stream, variables);
+        auto [right_type, right_side] = table.evaluate_expression(stream, variables);
         
         BoolVector result = (left_side <= expr) && (expr <= right_side);
         
@@ -151,8 +151,6 @@ BoolVector ConditionEvaluation::evaluate_primary_condition(){
             result = apply_condition(comparator, expr, query_result);
         }
         
-        // here the select must return a vector of values and we compare each to the value
-        // TODO fix stream copying
         else{
             auto vectors = process_select_vectors();
             
@@ -180,7 +178,7 @@ BoolVector ConditionEvaluation::evaluate_primary_condition(){
     
     // here we just compare against an expression
     
-    auto right_expression = table.evaluate_expression(stream, variables);
+    auto [right_type, right_expression] = table.evaluate_expression(stream, variables);
     
     BoolVector result = apply_condition(comparator, expr, right_expression);
     
@@ -245,21 +243,24 @@ static std::string get_inside_brackets(TokenStream& stream){
     return result;
 }
 
-Table ConditionEvaluation::process_select_single_row(const BoundRow& extra_vars){
+Table ConditionEvaluation::process_select_single_row(const std::string& statement, const BoundRow& extra_vars){
     auto vars = variables + extra_vars;
     
-    return select_callback(stream, vars);
+    TokenStream new_stream(statement);
+    
+    return select_callback(new_stream, vars);
 }
 
 std::vector<Table> ConditionEvaluation::process_select(){
     std::string select_text = get_inside_brackets(stream);
+    select_text += ";";
     
     std::vector<Table> result;
     
     for(auto&& row : table.rows){
         BoundRow bound(table.header, row);
         
-        result.push_back(process_select_single_row(bound));
+        result.push_back(process_select_single_row(select_text, bound));
     }
     
     return result;

@@ -31,6 +31,12 @@ private:
     
     std::map<std::string, Table> tables;
     
+    std::function<Table(TokenStream&, const VariableList&)> select_callback = 
+        [this](TokenStream& stream, const VariableList& variables){
+        return this->evaluate_select(stream, variables);
+    };
+    
+    
     mutable std::shared_mutex tables_lock;
     
     friend class DatabaseManager;

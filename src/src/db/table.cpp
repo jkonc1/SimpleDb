@@ -4,8 +4,7 @@
 #include "db/expression.h"
 #include "db/variable_list.h"
 #include "parse/token_to_cell.h"
-#include "helper/read_array.h"
-#include "helper/like.h"
+#include "helper/row_container.h"
 
 #include <cassert>
 #include <mutex>
@@ -13,20 +12,19 @@
 #include <set>
 #include <algorithm>
 #include <functional>
+#include <unordered_set>
 
-TableHeader::TableHeader(std::vector<std::string> column_names, std::vector<Cell::DataType> column_types)
+TableHeader::TableHeader(std::vector<std::pair<Cell::DataType, std::string>> column_definitions)
 {
-    if(column_names.size() != column_types.size()){
-        throw std::runtime_error("Column count mismatch");
-    }
-    
-    for(auto&& [column_name, column_type, index] : std::views::zip(column_names, column_types, std::views::iota((size_t)0))){
-        ColumnDescriptor column = {.alias = "", .name = column_name, .type = column_type, .index=index};
+    for(auto&& [column_def, index] : std::views::zip(column_definitions, std::views::iota((size_t)0))){
+        auto&& [column_type, column_name] = column_def;
+        ColumnDescriptor column = {.alias = "", .name = std::move(column_name), .type = column_type, .index=index};
         
         columns.push_back(column);
         
-        column_to_index[column_name] = columns.size() - 1;
     }
+    
+    calculate_lookup_map();
 }
 
 TableHeader TableHeader::join(const TableHeader& left, const TableHeader& right){
@@ -38,6 +36,10 @@ TableHeader TableHeader::add_alias(const std::string& alias) const {
     
     for(auto& column : header.columns){
         column.alias = alias;
+        
+        std::string qualified_name = alias + "." + column.name;
+        
+        header.column_to_index.emplace(qualified_name, column.index);
     }
     
     return header;
@@ -48,7 +50,11 @@ std::optional<ColumnDescriptor> TableHeader::get_column_info(const std::string& 
         return std::nullopt;
     }
     
-    size_t index = column_to_index.at(name);
+    if(column_to_index.count(name) > 1){
+        throw InvalidQuery("Ambiguous column access : " + name);
+    }
+    
+    size_t index = column_to_index.find(name) -> second;
     
     return columns[index];
 }
@@ -64,8 +70,20 @@ TableHeader::TableHeader(const TableHeader& left, const TableHeader& right) :
         column_copy.index = index;
         
         columns.push_back(column_copy);
+    }
+    
+    calculate_lookup_map();
+}
+
+void TableHeader::calculate_lookup_map(){
+    for(auto column : columns){
+        column_to_index.emplace(column.name, column.index);
         
-        column_to_index[column_copy.name] = index;
+        if(!column.alias.empty()){
+            std::string qualified_name = column.alias + "." + column.name;
+            
+            column_to_index.emplace(qualified_name, column.index);
+        }
     }
 }
 
@@ -73,10 +91,13 @@ TableRow TableHeader::create_row(const std::map<std::string, std::string>& data)
     std::vector<Cell> cells(column_count());
     
     for(auto&& [column_name, value] : data){
-        if(!column_to_index.contains(column_name)){
+        auto column = get_column_info(column_name);
+        
+        if(!column.has_value()){
             throw InvalidQuery("Column '" + column_name + "' does not exist");
         }
-        size_t index = column_to_index.at(column_name);
+        
+        size_t index = column.value().index;
         
         cells[index] = Cell(value, columns[index].type);
     }
@@ -96,8 +117,8 @@ Table::Table(TableHeader header):
 {
 }
 
-Table::Table(const std::vector<std::string>& column_names, const std::vector<Cell::DataType>& column_types):
-    Table(TableHeader(column_names, column_types))
+Table::Table(std::vector<std::pair<Cell::DataType, std::string>> columns):
+    Table(TableHeader(std::move(columns)))
 {
 }
 
@@ -178,7 +199,44 @@ std::unique_ptr<ExpressionNode> Table::parse_primary_expression(TokenStream& str
     }
     
     if(next_token.like("COUNT")){
+        stream.ignore_token("(");
+        if(stream.try_ignore_token("*")){
+            stream.ignore_token(")");
+            return std::make_unique<ConstantNode>(Cell((int)row_count(), Cell::DataType::Int));
+        }
         
+        bool distinct = stream.try_ignore_token("DISTINCT");
+        stream.try_ignore_token("ALL");
+        
+        std::string column = stream.get_token(TokenType::Identifier);
+        
+        stream.ignore_token(")");
+        
+        auto descriptor = header.get_column_info(column);
+        
+        if(!descriptor.has_value()){
+            throw InvalidQuery("Unknown column " + column);
+        }
+        
+        size_t column_index = descriptor->index;
+        
+        std::vector<Cell> cells_in_column;
+        
+        for(auto& row : rows){
+            if(row[column_index].type() != Cell::DataType::Null){
+                cells_in_column.push_back(row[column_index]);
+            }
+        }
+        
+        if(distinct){
+            std::set<Cell> cell_set;
+            for(auto& i : cells_in_column){
+                cell_set.insert(std::move(i));
+            }
+            cells_in_column = std::vector<Cell>(cell_set.begin(), cell_set.end());
+        }
+        
+        return std::make_unique<ConstantNode>(Cell((int)cells_in_column.size(), Cell::DataType::Int));
     }
     
     if(next_token.like("MAX") || next_token.like("MIN") || next_token.like("SUM") || next_token.like("AVG")){
@@ -188,7 +246,7 @@ std::unique_ptr<ExpressionNode> Table::parse_primary_expression(TokenStream& str
         
         bool is_distinct = stream.try_ignore_token("DISTINCT");
         
-        auto values = evaluate_expression(stream, variables);
+        auto values = evaluate_expression(stream, variables).second;
         
         stream.ignore_token(")");
         
@@ -277,7 +335,7 @@ std::unique_ptr<ExpressionNode> Table::parse_additive_expression(TokenStream& st
     return result;
 }
 
-CellVector Table::evaluate_expression(TokenStream& stream, const VariableList& variables) const{
+std::pair<Cell::DataType, CellVector> Table::evaluate_expression(TokenStream& stream, const VariableList& variables) const{
     auto tree = parse_additive_expression(stream, variables);
     
     CellVector result(rows.size());
@@ -291,7 +349,10 @@ CellVector Table::evaluate_expression(TokenStream& stream, const VariableList& v
         result[row_index] = tree->evaluate(new_variables);
     }
     
-    return result;
+    BoundRow dummy_row(header, TableRow(header.column_count()));
+    auto type = tree->get_type(variables + dummy_row);
+    
+    return {type, std::move(result)};
 }
 
 
@@ -300,8 +361,7 @@ void Table::filter_by_condition(TokenStream& stream, const VariableList& variabl
             
     auto lock = std::unique_lock(mutex);
     
-    ConditionEvaluation evaluation(*this, stream, variables, select_callback);
-    auto condition_result = evaluation.evaluate();
+    auto condition_result = evaluate_condition(stream, variables, select_callback);
     
     std::vector<TableRow> new_rows;
     
@@ -312,4 +372,113 @@ void Table::filter_by_condition(TokenStream& stream, const VariableList& variabl
     }
     
     rows = std::move(new_rows);
+}
+
+std::vector<Table> Table::group_by([[maybe_unused]] const std::vector<std::string>& grouping_columns) {
+    std::unordered_map<std::vector<Cell>, Table, TableRowHash, TableRowIdentical> mapping;
+    
+    std::vector<size_t> selected_column_indexes;
+    
+    for(auto&& column : grouping_columns){
+        auto descriptor = header.get_column_info(column);
+        
+        if(!descriptor.has_value()){
+            throw InvalidQuery("Grouping by non-existent column " + column);
+        }
+        
+        selected_column_indexes.push_back(descriptor->index);
+    }
+    
+    for(auto&& row : rows){
+        std::vector<Cell> selected_columns;
+        for(size_t i : selected_column_indexes){
+            selected_columns.push_back(row[i]);
+        }
+        
+        mapping.try_emplace(selected_columns, header);
+        
+        mapping.at(selected_columns).add_row(std::move(row));
+    }
+    
+    rows.clear();
+    
+    std::vector<Table> result;
+    
+    for(auto&& [groups, table] : mapping){
+        result.push_back(std::move(table));
+    }
+    
+    return result;
+}
+
+BoolVector Table::evaluate_condition(TokenStream& stream, const VariableList& variables, 
+        std::function<Table(TokenStream&, const VariableList&)> select_callback) const {
+    
+    ConditionEvaluation evaluation(*this, stream, variables, select_callback);
+    return  evaluation.evaluate();
+}
+
+template<class C, class T>
+static T extract_same(const C& container){
+    T first = container[0];
+    
+    for(const auto& i : container){
+        if(i!=first){
+            throw InvalidQuery("Non aggregate used as aggregate");
+        }
+    }
+    
+    return first;
+}
+
+bool Table::evaluate_aggregate_condition(TokenStream& stream, const VariableList& variables, 
+        std::function<Table(TokenStream&, const VariableList&)> select_callback) const {
+    
+    if(row_count() == 0){
+        return false;
+    }
+    
+    auto values = evaluate_condition(stream, variables, select_callback);
+    
+    return extract_same<BoolVector,bool>(values);
+}
+
+void Table::deduplicate(){
+    std::unordered_set<TableRow, TableRowHash, TableRowIdentical> row_set;
+    for(auto&& row : rows){
+        row_set.insert(std::move(row));
+    }
+    
+    rows = std::vector(row_set.begin(), row_set.end());
+}
+
+void Table::vertical_join(const Table& other){
+    if(!(header.get_columns() == other.header.get_columns())){
+        throw std::runtime_error("Attempt to join tables with different columns");
+    }
+    
+    rows.append_range(other.rows);
+}
+
+
+Table Table::project(const std::vector<std::string>& expressions, const VariableList& variables) const {
+    std::vector<std::pair<Cell::DataType, std::string>> column_definitions;
+    std::vector<TableRow> new_table_rows(row_count());
+    
+    for(auto&& expr : expressions){
+        TokenStream stream(expr);
+        
+        auto [type, values] = evaluate_expression(stream, variables);
+        
+        column_definitions.emplace_back(type, expr);
+        
+        for(size_t index = 0; index < row_count(); index++){
+            new_table_rows[index].push_back(values[index]);
+        }
+    }
+    
+    Table result(std::move(column_definitions));
+    result.rows = std::move(new_table_rows);
+    
+    return result;
 }
