@@ -1,4 +1,12 @@
-import os
+#!/bin/env python3
+
+import os, sys
+
+if len(sys.argv) != 2:
+    print("Usage: python3 win_connect.py <named pipe location>")
+    quit()
+
+pipe_path = sys.argv[1]
 
 def read_msg(fd):
     res = ""
@@ -16,7 +24,7 @@ def send_msg(fd, msg):
     os.write(fd, (msg + "\n").encode("utf-8"))
 
 
-fd = os.open(r'\\.\pipe\db_pipe', os.O_RDWR)
+fd = os.open(pipe_path, os.O_RDWR)
 
 print(read_msg(fd))
 
