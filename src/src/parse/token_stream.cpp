@@ -127,7 +127,7 @@ Token TokenStream::get_string() {
 Token TokenStream::get_identifier() {
     std::string value;
     char c = peek();
-    while (!stream_empty() && (isalpha(c) || isdigit(c) || c == '_')) {
+    while (!stream_empty() && (isalpha(c) || isdigit(c) || c == '_' || c == '.')) {
         value += get();
         c = peek();
     }

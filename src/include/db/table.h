@@ -64,6 +64,7 @@ public:
     Table(std::vector<std::pair<Cell::DataType, std::string>> columns);
     
     Table(Table&& other) noexcept;
+    Table& operator=(Table&& other) noexcept;
     
     void filter_by_condition(TokenStream& stream, const VariableList& variables,
         std::function<Table(TokenStream&, const VariableList&)> select_callback);

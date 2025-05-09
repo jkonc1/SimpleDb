@@ -76,6 +76,7 @@ TableHeader::TableHeader(const TableHeader& left, const TableHeader& right) :
 }
 
 void TableHeader::calculate_lookup_map(){
+    column_to_index.clear();
     for(auto column : columns){
         column_to_index.emplace(column.name, column.index);
         
@@ -125,7 +126,13 @@ Table::Table(std::vector<std::pair<Cell::DataType, std::string>> columns):
 Table::Table(Table&& other) noexcept : 
     header(std::move(other.header)), rows(std::move(other.rows))
 {
-    auto lock = std::lock_guard(other.mutex);
+}
+
+Table& Table::operator=(Table&& other) noexcept {
+    header = std::move(other.header);
+    rows = std::move(other.rows);
+    
+    return *this;
 }
 
 void Table::add_row(std::vector<Cell> data){
@@ -246,7 +253,11 @@ std::unique_ptr<ExpressionNode> Table::parse_primary_expression(TokenStream& str
         
         bool is_distinct = stream.try_ignore_token("DISTINCT");
         
-        auto values = evaluate_expression(stream, variables).second;
+        auto [type, values] = evaluate_expression(stream, variables);
+        
+        if(values.size() == 0){
+            return std::make_unique<ConstantNode>(Cell());
+        }
         
         stream.ignore_token(")");
         
@@ -265,8 +276,6 @@ std::unique_ptr<ExpressionNode> Table::parse_primary_expression(TokenStream& str
             value = values.min();
         }
         else{
-            // sum type
-            
             value = values[0];
             
             for(size_t i = 1; i < values.size(); ++i){

@@ -30,19 +30,27 @@ BoolVector ConditionEvaluation::evaluate_primary_condition(){
         return result;
     }
     
-    if(stream.try_ignore_token("(")){
-        auto [type, values] = table.evaluate_expression(stream, variables);
-        
+    
+    bool negated = stream.try_ignore_token("NOT");
+    
+    bool bracketed = stream.try_ignore_token("(");
+    
+    auto [expr_type, expr] = table.evaluate_expression(stream, variables);
+    
+    if(bracketed){
         stream.ignore_token(")");
-        stream.ignore_token("IS");
-        
+    }
+    
+    negated ^= stream.try_ignore_token("NOT");
+    
+    if(stream.try_ignore_token("IS")){
         bool is_negated = stream.try_ignore_token("NOT");
         
         stream.ignore_token("NULL");
         
         BoolVector result =  apply_condition([](const Cell& cell){
             return cell.type() == Cell::DataType::Null;
-        }, values);
+        }, expr);
         
         if(is_negated){
             result = !result;
@@ -50,10 +58,6 @@ BoolVector ConditionEvaluation::evaluate_primary_condition(){
         
         return result;
     }
-    
-    auto [expr_type, expr] = table.evaluate_expression(stream, variables);
-    
-    bool negated = stream.try_ignore_token("NOT");
     
     if(stream.try_ignore_token("LIKE")){
         auto pattern = stream.get_token(TokenType::String);
@@ -94,6 +98,8 @@ BoolVector ConditionEvaluation::evaluate_primary_condition(){
             
             searched_values = std::vector(expr.size(), converted);
         }
+        
+        stream.ignore_token(")");
         
         BoolVector result = apply_condition([](const Cell& target, const std::vector<Cell>& values){
             return std::count(std::begin(values), std::end(values), target) > 0;
@@ -151,6 +157,8 @@ BoolVector ConditionEvaluation::evaluate_primary_condition(){
             result = apply_condition(comparator, expr, query_result);
         }
         
+        // here the select must return a vector of values and we compare each to the value
+        // TODO fix stream copying
         else{
             auto vectors = process_select_vectors();
             
@@ -195,7 +203,7 @@ BoolVector ConditionEvaluation::evaluate_conjunctive_condition(){
     while(stream.try_ignore_token("AND")){
         auto right = evaluate_primary_condition();
         
-        result &= right;
+        result = result && right;
     }
     
     return result;
@@ -207,7 +215,7 @@ BoolVector ConditionEvaluation::evaluate_disjunctive_condition(){
     while(stream.try_ignore_token("OR")){
         auto right = evaluate_primary_condition();
         
-        result |= right;
+        result = result || right;
     }
     
     return result;

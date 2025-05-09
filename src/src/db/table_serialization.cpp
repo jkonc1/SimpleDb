@@ -108,7 +108,13 @@ void serialize_table(const Table& table, std::ostream& os) {
     VoidableRow names_row;
     
     for(const auto& column : table.get_columns()){
-        names_row.push_back(column.name);
+        std::string name;
+        if(!column.alias.empty()){
+            name = column.alias + ".";
+        }
+        name+=column.name;
+        
+        names_row.push_back(name);
     }
     
     VoidableRow types_row;
