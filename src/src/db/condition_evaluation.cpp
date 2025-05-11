@@ -15,23 +15,198 @@ static BoolVector apply_condition(const Pred& condition, const F& first, const C
     return result;
 }
 
-BoolVector ConditionEvaluation::evaluate_primary_condition(){
-    if(stream.try_ignore_token("EXISTS")){
-        stream.ignore_token("(");
-        
-        auto select_result = process_select();
-        
-        BoolVector result = apply_condition([](const Table& table){
-            return table.row_count() > 0;
-        }, select_result);
-        
-        stream.ignore_token(")");
-        
-        return result;
+BoolVector ConditionEvaluation::evaluate_exists(){
+    stream.ignore_token("(");
+    
+    auto select_result = process_select();
+    
+    BoolVector result = apply_condition([](const Table& table){
+        return table.row_count() > 0;
+    }, select_result);
+    
+    stream.ignore_token(")");
+    
+    return result;
+}
+
+BoolVector ConditionEvaluation::evaluate_inner_condition(){
+    bool negated = stream.try_ignore_token("NOT");
+    
+    BoolVector result = evaluate_primary_condition();
+    
+    if(negated){
+        result = !result;
     }
     
+    return result;
+}
+
+BoolVector ConditionEvaluation::evaluate_is(CellVector expression){
+    bool is_negated = stream.try_ignore_token("NOT");
     
-    bool negated = stream.try_ignore_token("NOT");
+    stream.ignore_token("NULL");
+    
+    BoolVector result =  apply_condition([](const Cell& cell){
+        return cell.type() == Cell::DataType::Null;
+    }, expression);
+    
+    if(is_negated){
+        result = !result;
+    }
+    
+    return result;
+}
+
+BoolVector ConditionEvaluation::evaluate_like(CellVector expression){
+    auto pattern = stream.get_token(TokenType::String);
+    
+    return apply_condition([pattern](const Cell& cell){
+        auto string = cell.repr();
+        if(!string.has_value()){
+            // NULL is not like anything
+            return false;
+        }
+        return is_like(string.value(), pattern);
+    }, expression);
+}
+
+BoolVector ConditionEvaluation::evaluate_in(CellVector expression){
+    stream.ignore_token("(");
+    
+    std::vector<std::vector<Cell>> searched_values;
+    
+    if(stream.peek_token().like("SELECT")){
+        searched_values = process_select_vectors();
+    }
+    else{
+        auto tokens_in_array = read_array(stream);
+        
+        std::vector<Cell> cells_in_array;
+        
+        for(auto& token : tokens_in_array){
+            cells_in_array.push_back(parse_token_to_cell(token));
+        }
+        
+        // searched values are same for all rows
+        searched_values = std::vector(expression.size(), cells_in_array);
+    }
+    
+    stream.ignore_token(")");
+    
+    BoolVector result = apply_condition([](const Cell& target, const std::vector<Cell>& values){
+        return std::count(std::begin(values), std::end(values), target) > 0;
+    }, expression, searched_values);
+    
+    return result;
+}
+
+BoolVector ConditionEvaluation::evaluate_between(CellVector expression){
+    auto [left_type, left_side_expressions] = table.evaluate_expression(stream, variables);
+    
+    stream.ignore_token("AND");
+    
+    auto [right_type, right_side_expressions] = table.evaluate_expression(stream, variables);
+    
+    BoolVector result = (left_side_expressions <= expression) && (expression <= right_side_expressions);
+    
+    return result;
+}
+
+ConditionEvaluation::Comparator<Cell> ConditionEvaluation::operator_token_to_comparator(const Token& token){
+    static const std::map<std::string, Comparator<Cell>> operator_to_comparator = {
+        {"<", std::less<Cell>()},
+        {"=", std::equal_to<Cell>()},
+        {">", std::greater<Cell>()},
+        {"<=", std::less_equal<Cell>()},
+        {">=", std::greater_equal<Cell>()},
+        {"<>", std::not_equal_to<Cell>()}
+    };
+    
+    if(!operator_to_comparator.contains(token.value)){
+        throw InvalidQuery("Invalid operator " + token.value);
+    }
+    
+    return operator_to_comparator.at(token.value);
+}
+
+BoolVector ConditionEvaluation::evaluate_compare_subquery(CellVector expression, Comparator<Cell> comparator, bool has_any, bool has_all){
+    stream.ignore_token("(");
+    
+    if(has_any && has_all){
+        throw InvalidQuery("Cannot use ANY and ALL together");
+    }
+    
+    if(!has_all && !has_any){
+        auto query_result = process_select_singles();
+        stream.ignore_token(")");
+        
+        return apply_condition(comparator, expression, query_result);
+    }
+    
+    auto vectors = process_select_vectors();
+    
+    stream.ignore_token(")");
+    
+    return apply_condition([&comparator, has_any](const Cell& value, const std::vector<Cell>& possibilites){
+        auto evaluations = apply_condition([value, &comparator](const Cell& possibility){
+            return comparator(value, possibility);
+        }, possibilites);
+        
+        if(has_any){
+            // called with any
+            return evaluations.max() == true;
+        }
+        
+        else{
+            // called with all
+            return evaluations.min() == true;
+        }
+    }, expression, vectors);
+}
+
+BoolVector ConditionEvaluation::evaluate_compare(CellVector expression){
+    Token comparator_token = stream.get_token();
+    
+    auto comparator = operator_token_to_comparator(comparator_token);
+    
+    bool has_any = stream.try_ignore_token("ANY");
+    bool has_all = stream.try_ignore_token("ALL");
+    
+    if(stream.peek_token().like("(")){
+        return evaluate_compare_subquery(std::move(expression), comparator, has_any, has_all);
+    }
+    
+    auto [right_type, right_expression] = table.evaluate_expression(stream, variables);
+    
+    BoolVector result = apply_condition(comparator, expression, right_expression);
+    
+    return result;
+}
+
+BoolVector ConditionEvaluation::evaluate_condition_switch(CellVector expression){
+    if(stream.try_ignore_token("IS")){
+        return evaluate_is(std::move(expression));
+    }
+    
+    if(stream.try_ignore_token("LIKE")){
+        return evaluate_like(std::move(expression));
+    }
+    
+    if(stream.try_ignore_token("IN")){
+        return evaluate_in(std::move(expression));
+    }
+    
+    if(stream.try_ignore_token("BETWEEN")){
+        return evaluate_between(std::move(expression));
+    }
+    
+    return evaluate_compare(std::move(expression));
+}
+
+BoolVector ConditionEvaluation::evaluate_primary_condition(){
+    if(stream.try_ignore_token("EXISTS")){
+        return evaluate_exists();
+    }
     
     bool bracketed = stream.try_ignore_token("(");
     
@@ -41,164 +216,20 @@ BoolVector ConditionEvaluation::evaluate_primary_condition(){
         stream.ignore_token(")");
     }
     
-    negated ^= stream.try_ignore_token("NOT");
+    bool negated =  stream.try_ignore_token("NOT");
     
-    if(stream.try_ignore_token("IS")){
-        bool is_negated = stream.try_ignore_token("NOT");
-        
-        stream.ignore_token("NULL");
-        
-        BoolVector result =  apply_condition([](const Cell& cell){
-            return cell.type() == Cell::DataType::Null;
-        }, expr);
-        
-        if(is_negated){
-            result = !result;
-        }
-        
-        return result;
-    }
-    
-    if(stream.try_ignore_token("LIKE")){
-        auto pattern = stream.get_token(TokenType::String);
-        
-        BoolVector result = apply_condition([pattern](const Cell& cell){
-            auto string = cell.repr();
-            if(!string.has_value()){
-                // NULL is not like anything
-                return false;
-            }
-            return is_like(string.value(), pattern);
-        }, expr);
-        
-        if(negated){
-            result = !result;
-        }
-        
-        return result;
-    }
-    
-    if(stream.try_ignore_token("IN")){
-        stream.ignore_token("(");
-        
-        std::vector<std::vector<Cell>> searched_values;
-        
-        if(stream.peek_token().like("SELECT")){
-            searched_values = process_select_vectors();
-            
-        }
-        else{
-            auto tokens = read_array(stream);
-            
-            std::vector<Cell> converted;
-            
-            for(auto& token : tokens){
-                converted.push_back(parse_token_to_cell(token));
-            }
-            
-            searched_values = std::vector(expr.size(), converted);
-        }
-        
-        stream.ignore_token(")");
-        
-        BoolVector result = apply_condition([](const Cell& target, const std::vector<Cell>& values){
-            return std::count(std::begin(values), std::end(values), target) > 0;
-        }, expr, searched_values);
-        
-        if(negated){
-            result = !result;
-        }
-        
-        return result;
-    }
-    
-    if(stream.try_ignore_token("BETWEEN")){
-        auto [left_type, left_side] = table.evaluate_expression(stream, variables);
-        
-        stream.ignore_token("AND");
-        
-        auto [right_type, right_side] = table.evaluate_expression(stream, variables);
-        
-        BoolVector result = (left_side <= expr) && (expr <= right_side);
-        
-        if(negated){
-            result = !result;
-        }
-        
-        return result;
-    }
-    
-    
-    //otherwise it must be one of the comparisions
-    
-    auto oper = stream.get_token();
-    
-    std::map<std::string, std::function<bool(const Cell&, const Cell&)>> operator_to_comparator = {{"<", std::less<Cell>()}, {"=", std::equal_to<Cell>()}, {">", std::greater<Cell>()}, {"<=", std::less_equal<Cell>()}, {">=", std::greater_equal<Cell>()}, {"<>", std::not_equal_to<Cell>()}};
-    
-    if(!operator_to_comparator.contains(oper.value)){
-        throw InvalidQuery("Invalid operator " + oper.value);
-    }
-    
-    auto comparator = operator_to_comparator.at(oper.value);
-    
-    bool has_any = stream.try_ignore_token("ANY");
-    bool has_all = stream.try_ignore_token("ALL");
-    
-    if(has_any && has_all){
-        throw InvalidQuery("Cannot use ANY and ALL together");
-    }
-    
-    if(stream.try_ignore_token("(")){
-        BoolVector result;
-        
-        if(!has_all && !has_any){
-            auto query_result = process_select_singles();
-            
-            result = apply_condition(comparator, expr, query_result);
-        }
-        
-        // here the select must return a vector of values and we compare each to the value
-        // TODO fix stream copying
-        else{
-            auto vectors = process_select_vectors();
-            
-            result = apply_condition([&comparator, has_any](const Cell& value, const std::vector<Cell>& possibilites){
-                auto evaluations = apply_condition([value, &comparator](const Cell& possibility){
-                    return comparator(value, possibility);
-                }, possibilites);
-                
-                if(has_any){
-                    // called with any
-                    return evaluations.max() == true;
-                }
-                
-                else{
-                    // called with all
-                    return evaluations.min() == true;
-                }
-            }, expr, vectors);
-        }
-        
-        stream.ignore_token(")");
-        
-        return result;
-    }
-    
-    // here we just compare against an expression
-    
-    auto [right_type, right_expression] = table.evaluate_expression(stream, variables);
-    
-    BoolVector result = apply_condition(comparator, expr, right_expression);
+    BoolVector result = evaluate_condition_switch(std::move(expr));
     
     if(negated){
         result = !result;
     }
     
     return result;
+    
 }
 
 BoolVector ConditionEvaluation::evaluate_conjunctive_condition(){
-    auto result = evaluate_primary_condition();
+    auto result = evaluate_inner_condition();
     
     while(stream.try_ignore_token("AND")){
         auto right = evaluate_primary_condition();

@@ -20,11 +20,27 @@ private:
     const VariableList& variables;
     std::function<Table(TokenStream&, const VariableList&)>& select_callback;
     
+    template<class T>
+    using Comparator = std::function<bool(const T&, const T&)>;
+        
     BoolVector evaluate_conjunctive_condition();
     BoolVector evaluate_disjunctive_condition();
     BoolVector evaluate_primary_condition();
-        
+    BoolVector evaluate_inner_condition();
+    
+    BoolVector evaluate_condition_switch(CellVector expression);
+    BoolVector evaluate_exists();
+    BoolVector evaluate_is(CellVector expression);
+    BoolVector evaluate_in(CellVector expression);
+    BoolVector evaluate_between(CellVector expression);
+    BoolVector evaluate_like(CellVector expression);
+    BoolVector evaluate_compare(CellVector expression);
+    BoolVector evaluate_compare_subquery(CellVector expression, Comparator<Cell> comparator, bool has_any, bool has_all);
+    
+    static Comparator<Cell> operator_token_to_comparator(const Token& token);
+    
     Table process_select_single_row(const std::string& statement, const BoundRow& extra_vars);
+    
     
     std::vector<Table> process_select();
     
