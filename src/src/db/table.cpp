@@ -1,9 +1,9 @@
 #include "db/table.h"
 #include "db/condition_evaluation.h"
+#include "db/expression_evaluation.h"
 #include "db/exceptions.h"
 #include "db/expression.h"
 #include "db/variable_list.h"
-#include "parse/token_to_cell.h"
 #include "helper/row_container.h"
 
 #include <cassert>
@@ -181,189 +181,6 @@ const std::vector<ColumnDescriptor>& TableHeader::get_columns() const{
     return columns;
 }
 
-static CellVector get_distinct(const CellVector& values){
-    std::set<Cell> values_set(std::begin(values), std::end(values));
-    
-    CellVector result(values_set.size());
-    
-    std::copy(std::begin(values_set), std::end(values_set), std::begin(result));
-    
-    return result;
-}
-
-std::unique_ptr<ExpressionNode> Table::parse_primary_expression(TokenStream& stream, const VariableList& variables) const {
-    auto next_token = stream.get_token();
-    
-    if(next_token.type != TokenType::Identifier){
-        
-        Cell value = parse_token_to_cell(next_token);
-        
-        return std::make_unique<ConstantNode>(value);
-    }
-    
-    if(next_token.like("NULL")){
-        return std::make_unique<ConstantNode>(Cell());
-    }
-    
-    if(next_token.like("COUNT")){
-        stream.ignore_token("(");
-        if(stream.try_ignore_token("*")){
-            stream.ignore_token(")");
-            return std::make_unique<ConstantNode>(Cell((int)row_count(), Cell::DataType::Int));
-        }
-        
-        bool distinct = stream.try_ignore_token("DISTINCT");
-        stream.try_ignore_token("ALL");
-        
-        std::string column = stream.get_token(TokenType::Identifier);
-        
-        stream.ignore_token(")");
-        
-        auto descriptor = header.get_column_info(column);
-        
-        if(!descriptor.has_value()){
-            throw InvalidQuery("Unknown column " + column);
-        }
-        
-        size_t column_index = descriptor->index;
-        
-        std::vector<Cell> cells_in_column;
-        
-        for(auto& row : rows){
-            if(row[column_index].type() != Cell::DataType::Null){
-                cells_in_column.push_back(row[column_index]);
-            }
-        }
-        
-        if(distinct){
-            std::set<Cell> cell_set;
-            for(auto& i : cells_in_column){
-                cell_set.insert(std::move(i));
-            }
-            cells_in_column = std::vector<Cell>(cell_set.begin(), cell_set.end());
-        }
-        
-        return std::make_unique<ConstantNode>(Cell((int)cells_in_column.size(), Cell::DataType::Int));
-    }
-    
-    if(next_token.like("MAX") || next_token.like("MIN") || next_token.like("SUM") || next_token.like("AVG")){
-        // TODO extract
-         
-        stream.ignore_token("(");
-        
-        bool is_distinct = stream.try_ignore_token("DISTINCT");
-        
-        auto [type, values] = evaluate_expression(stream, variables);
-        
-        if(values.size() == 0){
-            return std::make_unique<ConstantNode>(Cell());
-        }
-        
-        stream.ignore_token(")");
-        
-        if(is_distinct){
-            if(next_token.like("MAX") || next_token.like("MIN")){
-                throw InvalidQuery("DISTINCT is not supported for MAX and MIN");
-            }
-            values = get_distinct(values);
-        }
-        
-        Cell value;
-        
-        if(next_token.like("MAX")){
-            value = values.max();
-        } else if(next_token.like("MIN")){
-            value = values.min();
-        }
-        else{
-            value = values[0];
-            
-            for(size_t i = 1; i < values.size(); ++i){
-                value += values[i];
-            }
-            
-            if(next_token.like("AVG")){
-                value /= Cell((int)values.size(), Cell::DataType::Int);
-            }
-        }
-        
-        return std::make_unique<ConstantNode>(value);
-    }
-    
-    // othervise it's a column name
-    
-    return std::make_unique<VariableNode>(next_token.value);
-}
-
-std::unique_ptr<ExpressionNode> Table::parse_multiplicative_expression(TokenStream& stream, const VariableList& variables) const {
-    auto result = parse_primary_expression(stream, variables);
-    
-    while(true){
-        auto next_token = stream.peek_token();
-        
-        if(next_token.value != "*" && next_token.value != "/"){
-            break;
-        }
-        
-        stream.ignore_token(next_token);
-        
-        auto next_expression = parse_primary_expression(stream, variables);
-        
-        if(next_token.value == "*"){
-            result = std::make_unique<MultiplicationNode>(std::move(result), std::move(next_expression));
-        } else {
-            result = std::make_unique<DivisionNode>(std::move(result), std::move(next_expression));
-        }
-    }
-    
-    return result;
-}
-
-std::unique_ptr<ExpressionNode> Table::parse_additive_expression(TokenStream& stream, const VariableList& variables) const {
-    auto result = parse_multiplicative_expression(stream, variables);
-    
-    // cannot be parsed recursively because of left-to right operation order
-    while(true){
-        auto next_token = stream.peek_token();
-        
-        if(next_token.value != "-" && next_token.value != "+"){
-            break;
-        }
-        
-        stream.ignore_token(next_token);
-        
-        auto next_expression = parse_multiplicative_expression(stream, variables);
-        
-        if(next_token.value == "-"){
-            result = std::make_unique<SubtractionNode>(std::move(result), std::move(next_expression));
-        } else {
-            result = std::make_unique<AdditionNode>(std::move(result), std::move(next_expression));
-        }
-    }
-    
-    return result;
-}
-
-std::pair<Cell::DataType, CellVector> Table::evaluate_expression(TokenStream& stream, const VariableList& variables) const{
-    auto tree = parse_additive_expression(stream, variables);
-    
-    CellVector result(rows.size());
-    for(size_t row_index = 0; row_index < rows.size(); ++row_index){
-        const TableRow& row = rows[row_index];
-        
-        BoundRow row_ref(header, row);
-        
-        auto new_variables = variables + row_ref;
-        
-        result[row_index] = tree->evaluate(new_variables);
-    }
-    
-    BoundRow dummy_row(header, TableRow(header.column_count()));
-    auto type = tree->get_type(variables + dummy_row);
-    
-    return {type, std::move(result)};
-}
-
 
 void Table::filter_by_condition(TokenStream& stream, const VariableList& variables, 
         std::function<Table(TokenStream&, const VariableList&)> select_callback) {
@@ -425,6 +242,12 @@ BoolVector Table::evaluate_condition(TokenStream& stream, const VariableList& va
     
     ConditionEvaluation evaluation(*this, stream, variables, select_callback);
     return  evaluation.evaluate();
+}
+
+EvaluatedExpression Table::evaluate_expression(TokenStream& stream, const VariableList& variables) const {
+    ExpressionEvaluation expr(*this, stream, variables);
+    
+    return expr.evaluate();
 }
 
 template<class C, class T>

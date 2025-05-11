@@ -10,10 +10,9 @@
 #include <functional>
 
 #include "db/cell.h"
-#include "parse/token_stream.h"
 #include "db/expression.h"
+#include "parse/token_stream.h"
 
-using CellVector = std::valarray<Cell>;
 using BoolVector = std::valarray<bool>;
 
 using TableRow = std::vector<Cell>;
@@ -95,19 +94,17 @@ private:
         return rows.size();
     }
     
-    std::pair<Cell::DataType, CellVector> evaluate_expression(TokenStream& stream, const VariableList& variables) const;
+    EvaluatedExpression evaluate_expression(TokenStream& stream, const VariableList& variables) const;
+    
     BoolVector evaluate_condition(TokenStream& stream, const VariableList& variables,
         std::function<Table(TokenStream&, const VariableList&)> select_callback) const;
-    
-    std::unique_ptr<ExpressionNode> parse_additive_expression(TokenStream& stream, const VariableList& variables) const;
-    std::unique_ptr<ExpressionNode> parse_multiplicative_expression(TokenStream& stream, const VariableList& variables) const;
-    std::unique_ptr<ExpressionNode> parse_primary_expression(TokenStream& stream, const VariableList& variables) const;
     
     mutable std::shared_mutex mutex;
     
     friend void serialize_table(const Table& table, std::ostream& os);
     
     friend class ConditionEvaluation;
+    friend class ExpressionEvaluation;
 };
 
 #endif

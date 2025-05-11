@@ -2,7 +2,16 @@
 #define EXPRESSION_H
 
 #include "db/cell.h"
+
+#include <valarray>
 #include <memory>
+
+using CellVector = std::valarray<Cell>;
+
+struct EvaluatedExpression {
+    Cell::DataType type;
+    CellVector values;
+};
 
 class VariableList;
 
@@ -68,5 +77,6 @@ public:
 private:
     Cell value;
 };
+
 
 #endif
