@@ -117,6 +117,10 @@ std::string Database::process_create_table(TokenStream& stream){
 
     while(true){
         std::string name = stream.get_token(TokenType::Identifier);
+        if(is_keyword(name)){
+            throw InvalidQuery("Invalid column name");
+        }
+        
         Cell::DataType type = string_to_type(stream.get_token(TokenType::Identifier));
 
         columns.emplace_back(type, std::move(name));

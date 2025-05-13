@@ -3,6 +3,6 @@
 
 #include <string>
 
-bool is_keyword(const std::string& string);
+bool is_keyword(const std::string& word);
 
 #endif
