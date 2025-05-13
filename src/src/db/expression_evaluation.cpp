@@ -114,8 +114,13 @@ std::unique_ptr<ExpressionNode> ExpressionEvaluation::parse_primary_expression()
     
     if(next_token.type == TokenType::Identifier){
         // column name
-        Token token = stream.get_token();
-        return std::make_unique<VariableNode>(std::move(token.value));
+        std::string column_name = stream.get_token(TokenType::Identifier);
+        
+        while(stream.try_ignore_token(".")){
+            column_name += "." + stream.get_token(TokenType::Identifier);
+        }
+        
+        return std::make_unique<VariableNode>(column_name);
     }
     
     Token token = stream.get_token();
