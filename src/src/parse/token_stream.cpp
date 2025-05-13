@@ -121,6 +121,9 @@ Token TokenStream::get_string() {
         value += c;
         c = get();
     }
+    if(c != quote){
+        throw InvalidQuery("Unclosed string literal");
+    }
     return {TokenType::String, value};
 }
 

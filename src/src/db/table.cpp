@@ -285,15 +285,14 @@ void Table::deduplicate(){
 }
 
 void Table::vertical_join(const Table& other){
-    if(!(header.get_columns() == other.header.get_columns())){
-        throw std::runtime_error("Attempt to join tables with different columns");
-    }
-    
     rows.append_range(other.rows);
 }
 
-
 Table Table::project(const std::vector<std::string>& expressions, const VariableList& variables) const {
+    if(expressions == std::vector<std::string>{"*"}){
+        return clone();
+    }
+    
     std::vector<std::pair<Cell::DataType, std::string>> column_definitions;
     std::vector<TableRow> new_table_rows(row_count());
     
@@ -311,6 +310,14 @@ Table Table::project(const std::vector<std::string>& expressions, const Variable
     
     Table result(std::move(column_definitions));
     result.rows = std::move(new_table_rows);
+    
+    return result;
+}
+
+Table Table::clone() const{
+    Table result(header);
+    
+    result.rows = (std::vector<TableRow>)rows;
     
     return result;
 }

@@ -23,6 +23,9 @@ private:
     
     Table evaluate_select(TokenStream& stream, const VariableList& variables);
     
+    std::vector<Table> evaluate_select_group(TokenStream& stream, const VariableList& variables, Table& table);
+    std::vector<std::pair<const Table&, std::string>> read_selected_tables(TokenStream& stream);
+    
     std::string process_create_table(TokenStream& stream);
     std::string process_drop_table(TokenStream& stream);
     std::string process_select(TokenStream& stream);

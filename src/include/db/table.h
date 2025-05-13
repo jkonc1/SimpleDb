@@ -94,6 +94,8 @@ private:
         return rows.size();
     }
     
+    Table clone() const;
+    
     EvaluatedExpression evaluate_expression(TokenStream& stream, const VariableList& variables) const;
     
     BoolVector evaluate_condition(TokenStream& stream, const VariableList& variables,

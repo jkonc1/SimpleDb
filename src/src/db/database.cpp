@@ -188,14 +188,8 @@ std::string Database::process_insert(TokenStream& stream){
     return "Row inserted into table " + table_name;
 }
 
-Table Database::evaluate_select(TokenStream& stream, const VariableList& variables = {}){
-    stream.ignore_token("SELECT");
-
-    [[maybe_unused]] bool distinct = stream.try_ignore_token("DISTINCT");
-
-    stream.try_ignore_token("ALL");
-
-    std::vector<std::string> selected_expressions(1);
+static std::vector<std::string> read_projection_list(TokenStream& stream){
+    std::vector<std::string> projection_expressions(1);
 
     while(true){
         Token token = stream.get_token();
@@ -204,13 +198,20 @@ Table Database::evaluate_select(TokenStream& stream, const VariableList& variabl
             break;
         }
         if(token.like(",")){
-            selected_expressions.push_back("");
+            projection_expressions.push_back("");
             continue;
         }
 
-        selected_expressions.back() += token.value;
+        if(!projection_expressions.back().empty()){
+            projection_expressions.back() += " ";
+        }
+        projection_expressions.back() += token.value;
     }
+    
+    return projection_expressions;
+}
 
+std::vector<std::pair<const Table&, std::string>> Database::read_selected_tables(TokenStream& stream){
     std::vector<std::pair<const Table&, std::string>> taken_tables;
 
     while(true){
@@ -235,6 +236,62 @@ Table Database::evaluate_select(TokenStream& stream, const VariableList& variabl
             break;
         }
     }
+    
+    return taken_tables;
+}
+
+std::vector<Table> Database::evaluate_select_group(TokenStream& stream, const VariableList& variables, Table& table){
+    if(!stream.try_ignore_token("GROUP")){
+        return table.group_by({});
+    }
+    
+    stream.ignore_token("BY");
+    std::vector<Table> groups;
+
+    std::vector<std::string> grouping_columns;
+
+    while(true){
+        std::string column_name = stream.get_token(TokenType::Identifier);
+
+        grouping_columns.push_back(column_name);
+
+        if(!stream.try_ignore_token(",")){
+            break;
+        }
+    }
+
+    groups=table.group_by(grouping_columns);
+
+    if(!stream.try_ignore_token("HAVING")){
+        return groups;
+    }
+    
+    std::string having_condition;
+    while(!stream.peek_token().like(";") && !stream.empty()){
+        having_condition += stream.get_token().value + " ";
+    }
+
+    std::vector<Table> filtered_groups;
+    
+    for(auto&& group : groups){
+        TokenStream stream(having_condition);
+
+        if(group.evaluate_aggregate_condition(stream, variables, select_callback)){
+            filtered_groups.push_back(std::move(group));
+        }
+    }
+    
+    return filtered_groups;
+}
+
+Table Database::evaluate_select(TokenStream& stream, const VariableList& variables = {}){
+    stream.ignore_token("SELECT");
+    bool distinct = stream.try_ignore_token("DISTINCT");
+    stream.try_ignore_token("ALL");
+
+    auto projection_expressions = read_projection_list(stream);
+
+    auto taken_tables = read_selected_tables(stream);
 
     Table combined_table = Table::cross_product(taken_tables);
 
@@ -242,74 +299,12 @@ Table Database::evaluate_select(TokenStream& stream, const VariableList& variabl
         combined_table.filter_by_condition(stream, variables, select_callback);
     }
 
-    std::vector<Table> groups;
-    
-    bool grouped = false;
+    std::vector<Table> groups = evaluate_select_group(stream, variables, combined_table);
 
-    if(stream.try_ignore_token("GROUP")){
-        stream.ignore_token("BY");
-        grouped = true;
+    Table result = combined_table.project(projection_expressions, variables);
 
-        std::vector<std::string> grouping_columns;
-
-        while(true){
-            std::string column_name = stream.get_token(TokenType::Identifier);
-
-            grouping_columns.push_back(column_name);
-
-            if(!stream.try_ignore_token(",")){
-                break;
-            }
-        }
-
-        groups=combined_table.group_by(grouping_columns);
-    }
-    else{
-        groups = combined_table.group_by({});
-    }
-
-    if(stream.try_ignore_token("HAVING")){
-        std::string condition;
-        while(!stream.peek_token().like(";") && !stream.empty()){
-            condition += stream.get_token().value + " ";
-        }
-
-        std::vector<Table> filtered_groups;
-        for(auto&& group : groups){
-            TokenStream stream(condition);
-
-            if(group.evaluate_aggregate_condition(stream, variables, select_callback)){
-                filtered_groups.push_back(std::move(group));
-            }
-        }
-        groups = std::move(filtered_groups);
-    }
-
-    std::vector<Table> projected_tables;
-
-    if(selected_expressions == std::vector<std::string>{"*"}){
-        projected_tables = std::move(groups);
-    }
-    else {
-        for(auto&& group : groups){
-            Table projection = group.project(selected_expressions, variables);
-            
-            if(grouped){
-                projection.deduplicate();
-            }
-
-            projected_tables.push_back(std::move(projection));
-        }
-    }
-
-    Table result = std::move(combined_table);
-
-    if(selected_expressions != std::vector<std::string>{"*"}){
-        result = result.project(selected_expressions, variables);
-    }
-
-    for(const auto& group : projected_tables){
-        result.vertical_join(group);
+    for(const auto& group : groups){
+        result.vertical_join(group.project(projection_expressions, variables));
     }
 
     if(distinct){
