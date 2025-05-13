@@ -9,8 +9,6 @@
 #include <mutex>
 
 void Database::add_table(const std::string& table_name, Table table){
-    auto lock = std::unique_lock(tables_lock);
-
     if(tables.contains(table_name)){
         throw std::runtime_error("Table " + table_name + " already exists");
     }
@@ -28,8 +26,6 @@ Table& Database::get_table(const std::string& table_name){
 }
 
 void Database::remove_table(const std::string& table_name){
-    auto lock = std::unique_lock(tables_lock);
-
     if(!tables.contains(table_name)){
         throw std::runtime_error("Table " + table_name + " does not exist");
     }
@@ -70,22 +66,27 @@ std::string Database::process_query_pick_type(TokenStream& stream){
     Token command = stream.peek_token();
 
     if(command.like("CREATE")){
+        auto lock = std::unique_lock(tables_lock);
         return process_create_table(stream);
     }
 
     if(command.like("DROP")){
+        auto lock = std::unique_lock(tables_lock);
         return process_drop_table(stream);
     }
 
     if(command.like("SELECT")){
+        auto lock = std::shared_lock(tables_lock);
         return process_select(stream);
     }
 
     if(command.like("INSERT")){
+        auto lock = std::shared_lock(tables_lock);
         return process_insert(stream);
     }
 
     if(command.like("DELETE")){
+        auto lock = std::shared_lock(tables_lock);
         return process_delete(stream);
     }
 
@@ -153,6 +154,8 @@ std::string Database::process_insert(TokenStream& stream){
     Table& table = get_table(table_name);
 
     std::vector<std::string> column_names;
+    
+    bool all_columns = false;
 
     if(stream.try_ignore_token("(")){
         auto column_name_tokens = read_array(stream);
@@ -167,9 +170,7 @@ std::string Database::process_insert(TokenStream& stream){
         stream.ignore_token(")");
     }
     else{
-        for(const auto& column : table.get_columns()){
-            column_names.push_back(column.name);
-        }
+        all_columns = true;
     }
 
     stream.ignore_token("VALUES");
@@ -180,6 +181,16 @@ std::string Database::process_insert(TokenStream& stream){
 
     stream.ignore_token(")");
     stream.ignore_token(";");
+    
+    if(all_columns){
+        std::vector<std::string> value_strings;
+        for(auto&& value : values){
+            value_strings.push_back(std::move(value.value));
+        }
+        table.add_row(value_strings);
+        
+        return "Row inserted into table " + table_name;
+    }
 
     std::map<std::string, std::string> column_value_map;
 

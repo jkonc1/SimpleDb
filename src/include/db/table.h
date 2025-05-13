@@ -76,25 +76,26 @@ public:
     void deduplicate();
 
     void add_row(const std::map<std::string, std::string>& values);
+    void add_row(const std::vector<std::string>& data);
     
     std::vector<Table> group_by(const std::vector<std::string>& group_columns);
     
-    const std::vector<ColumnDescriptor>& get_columns() const;
-
     static Table cross_product(std::vector<std::pair<const Table&, std::string>> tables);
     
     void vertical_join(const Table& other);
 private:
     TableHeader header;
     std::vector<TableRow> rows;
-
-    void add_row(std::vector<Cell> data);
     
     size_t row_count() const {
         return rows.size();
     }
     
+    void add_row(TableRow data);
+    
     Table clone() const;
+    
+    const std::vector<ColumnDescriptor>& get_columns() const;
     
     EvaluatedExpression evaluate_expression(TokenStream& stream, const VariableList& variables) const;
     

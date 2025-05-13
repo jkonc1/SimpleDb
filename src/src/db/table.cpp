@@ -9,8 +9,6 @@
 #include <cassert>
 #include <mutex>
 #include <ranges>
-#include <set>
-#include <algorithm>
 #include <functional>
 #include <unordered_set>
 
@@ -135,13 +133,28 @@ Table& Table::operator=(Table&& other) noexcept {
     return *this;
 }
 
-void Table::add_row(std::vector<Cell> data){
-    auto lock = std::lock_guard(mutex);
-    
+void Table::add_row(TableRow data){
     rows.push_back(std::move(data));
 }
 
+void Table::add_row(const std::vector<std::string>& data){
+    auto lock = std::unique_lock(mutex);
+    
+    if(data.size() != get_columns().size()){
+        throw InvalidQuery("Wrong number of inserted fields");
+    }
+    
+    std::vector<Cell> converted_data;
+    for(auto&& [value, column] : std::views::zip(data, get_columns())){
+        converted_data.push_back(Cell(value, column.type));
+    }
+    
+    add_row(std::move(converted_data));
+}
+
 void Table::add_row(const std::map<std::string, std::string>& values){
+    auto lock = std::unique_lock(mutex);
+    
     add_row(header.create_row(values));
 }
 
@@ -186,7 +199,7 @@ void Table::filter_by_condition(TokenStream& stream, const VariableList& variabl
         std::function<Table(TokenStream&, const VariableList&)> select_callback) {
             
     auto lock = std::unique_lock(mutex);
-    
+            
     auto condition_result = evaluate_condition(stream, variables, select_callback);
     
     std::vector<TableRow> new_rows;
@@ -200,8 +213,10 @@ void Table::filter_by_condition(TokenStream& stream, const VariableList& variabl
     rows = std::move(new_rows);
 }
 
-std::vector<Table> Table::group_by([[maybe_unused]] const std::vector<std::string>& grouping_columns) {
+std::vector<Table> Table::group_by(const std::vector<std::string>& grouping_columns) {
     std::unordered_map<std::vector<Cell>, Table, TableRowHash, TableRowIdentical> mapping;
+
+    auto lock = std::unique_lock(mutex);
     
     std::vector<size_t> selected_column_indexes;
     
@@ -266,6 +281,8 @@ static T extract_same(const C& container){
 bool Table::evaluate_aggregate_condition(TokenStream& stream, const VariableList& variables, 
         std::function<Table(TokenStream&, const VariableList&)> select_callback) const {
     
+    auto lock = std::shared_lock(mutex);
+    
     if(row_count() == 0){
         return false;
     }
@@ -276,6 +293,8 @@ bool Table::evaluate_aggregate_condition(TokenStream& stream, const VariableList
 }
 
 void Table::deduplicate(){
+    auto lock = std::unique_lock(mutex);
+    
     std::unordered_set<TableRow, TableRowHash, TableRowIdentical> row_set;
     for(auto&& row : rows){
         row_set.insert(std::move(row));
@@ -285,10 +304,14 @@ void Table::deduplicate(){
 }
 
 void Table::vertical_join(const Table& other){
+    auto lock = std::unique_lock(mutex);
+    
     rows.append_range(other.rows);
 }
 
 Table Table::project(const std::vector<std::string>& expressions, const VariableList& variables) const {
+    auto lock = std::shared_lock(mutex);
+    
     if(expressions == std::vector<std::string>{"*"}){
         return clone();
     }

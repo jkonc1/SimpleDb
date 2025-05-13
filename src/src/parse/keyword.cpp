@@ -38,7 +38,7 @@ static const std::vector<std::string> keyword_list = {
 
 bool is_keyword(const std::string &word){
     std::string upper = to_upper(word);
-    for(auto& keyword : keyword_list){
+    for(const auto& keyword : keyword_list){
         if(upper == keyword){
             return true;
         }
