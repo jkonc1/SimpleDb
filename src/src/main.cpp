@@ -24,7 +24,7 @@ void process_connection(std::unique_ptr<IPCConnection> connection, Database& db)
     try{
         query = connection->receive();
     }
-    catch(const std::exception& e){
+    catch(const std::exception&){
         logger::log("Failed to read query");
         return;
     }
@@ -89,6 +89,8 @@ int main(int argc, char* argv[]){
         logger::log("Received SIGINT");
         socket->stop();
     });
+
+    std::cout << "Started" << std::endl;
     
     try{
     socket->listen(callback);

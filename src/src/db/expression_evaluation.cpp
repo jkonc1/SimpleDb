@@ -2,6 +2,7 @@
 #include "parse/token_to_cell.h"
 
 #include <set>
+#include <algorithm>
 
 template <class C>
 static C get_distinct(const C& values){

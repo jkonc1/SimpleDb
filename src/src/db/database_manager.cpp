@@ -1,6 +1,7 @@
 #include "db/database_manager.h"
 #include "db/table_serialization.h"
 #include "db/exceptions.h"
+#include "helper/logger.h"
 
 #include <fstream>
 #include <random>
@@ -10,7 +11,12 @@ DatabaseManager::DatabaseManager(const std::filesystem::path& database_directory
 
 DatabaseManager::~DatabaseManager(){
     if(is_loaded()){
-        save();
+        try{
+            save();
+        }
+        catch(...){
+            logger::log("Warning: failed to save database");
+        }
     }
 }
 
@@ -137,6 +143,7 @@ void DatabaseManager::save() {
     check_directory(path);
     
     std::filesystem::remove_all(path);
+    // TODO change to move
     std::filesystem::rename(temp_dir, path);
 }
 
