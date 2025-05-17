@@ -4,6 +4,8 @@
 
 #include <sstream>
 #include <utility>
+#include <functional>
+#include <format>
 
 std::optional<std::string> Cell::repr() const {
     if(type() == DataType::Null){
@@ -86,8 +88,8 @@ std::string my_to_string(const T& value){
 Cell Cell::convert_to_int() const {
     return std::visit(
         overload{
-            [](const int& value){ return Cell(value); },
-            [](const std::string& value){ return Cell(string_to<int>(value)); },
+            [](const int& value){ return construct_from(value); },
+            [](const std::string& value){ return construct_from(string_to<int>(value)); },
             [](const std::monostate&){ return Cell(); },
             [](auto&&) -> Cell { throw InvalidConversion("Can't value to int"); },
         },
@@ -98,9 +100,9 @@ Cell Cell::convert_to_int() const {
 Cell Cell::convert_to_float() const {
     return std::visit(
         overload{
-            [](const int& value){ return Cell(static_cast<float>(value)); },
-            [](const float& value){ return Cell(value); },
-            [](const std::string& value){ return Cell(string_to<float>(value)); },
+            [](const int& value){ return construct_from(static_cast<float>(value)); },
+            [](const float& value){ return construct_from(value); },
+            [](const std::string& value){ return construct_from(string_to<float>(value)); },
             [](const std::monostate&){ return Cell(); },
             [](const auto&&) -> Cell { throw InvalidConversion("Can't convert value to float"); },
         },
@@ -111,9 +113,9 @@ Cell Cell::convert_to_float() const {
 Cell Cell::convert_to_char() const {
     return std::visit(
         overload{
-            [](const char& value){ return Cell(value); },
+            [](const char& value){ return construct_from(value); },
             [](const std::monostate&){ return Cell(); },
-            [](const std::string& value){ return Cell(string_to<char>(value)); },
+            [](const std::string& value){ return construct_from(string_to<char>(value)); },
             [](const auto&&) -> Cell { throw InvalidConversion("Can't convert value to char"); },
         },
         data
@@ -123,10 +125,10 @@ Cell Cell::convert_to_char() const {
 Cell Cell::convert_to_string() const {
     return std::visit(
         overload{
-            [](const int& value){ return Cell(my_to_string(value)); },
-            [](const float& value){ return Cell(my_to_string(value)); },
-            [](const std::string& value){ return Cell(value); },
-            [](const char& value){ return Cell(std::string(1, value)); },
+            [](const int& value){ return construct_from(my_to_string(value)); },
+            [](const float& value){ return construct_from(my_to_string(value)); },
+            [](const std::string& value){ return construct_from(value); },
+            [](const char& value){ return construct_from(std::string(1, value)); },
             [](const std::monostate&){ return Cell(); }
         },
         data

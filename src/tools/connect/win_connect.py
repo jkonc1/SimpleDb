@@ -23,11 +23,11 @@ def read_msg(fd):
 def send_msg(fd, msg):
     os.write(fd, (msg + "\n").encode("utf-8"))
 
+msg=input()
 
 fd = os.open(pipe_path, os.O_RDWR)
 
-print(read_msg(fd))
+send_msg(fd, msg)
 
-send_msg(fd, 'peter')
-
-print(read_msg(fd))
+while True:
+    print(read_msg(fd))

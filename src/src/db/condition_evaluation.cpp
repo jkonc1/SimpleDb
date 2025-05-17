@@ -310,7 +310,7 @@ std::vector<Table> ConditionEvaluation::process_select(){
     return result;
 }
 
-const Cell& ConditionEvaluation::extract_single_cell(const Table& table){ //NOLINT needs friend access
+const Cell& ConditionEvaluation::extract_single_cell(const Table& table){
     if(table.get_columns().size() != 1){
         throw InvalidQuery("Subquery table must have 1 column");
     }
@@ -321,7 +321,7 @@ const Cell& ConditionEvaluation::extract_single_cell(const Table& table){ //NOLI
     return table.rows[0][0];
 }
 
-std::vector<Cell> ConditionEvaluation::extract_vector(const Table& table){ //NOLINT needs friend access
+std::vector<Cell> ConditionEvaluation::extract_vector(const Table& table){
     if(table.get_columns().size() != 1){
         throw InvalidQuery("Subquery table must have 1 column");
     }

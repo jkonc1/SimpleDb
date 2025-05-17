@@ -4,6 +4,7 @@
 #include "db/cell.h"
 
 #include <valarray>
+#include <functional>
 #include <memory>
 
 using CellVector = std::valarray<Cell>;

@@ -34,13 +34,13 @@ void WindowsNamedPipe::start_accepting(std::function<void(std::unique_ptr<IPCCon
     bool success = ConnectNamedPipe(pipe_handle, &overlapped);
     DWORD last_error = GetLastError();
 
-    if (!success && last_error != ERROR_IO_PENDING) {
+    if (!success && last_error != ERROR_IO_PENDING && last_error != ERROR_PIPE_CONNECTED) {
         CloseHandle(pipe_handle);
         throw std::runtime_error("Connecting named pipe failed");
     }
 
     event->async_wait(
-        [this, pipe_handle, overlapped, event = std::move(event), callback](const asio::error_code& ec) {
+        [this, pipe_handle, event, callback](const asio::error_code& ec) {
             if (!ec) {
                 asio::windows::stream_handle stream(io, pipe_handle);
                 auto connection = std::make_unique<WindowsNamedPipeConnection>(std::move(stream));
@@ -50,6 +50,7 @@ void WindowsNamedPipe::start_accepting(std::function<void(std::unique_ptr<IPCCon
                     start_accepting(callback);
                 }
             } else if (ec == asio::error::operation_aborted) {
+                std::cerr << "Aborted\n";
                 CloseHandle(pipe_handle);
             } else {
                 CloseHandle(pipe_handle);

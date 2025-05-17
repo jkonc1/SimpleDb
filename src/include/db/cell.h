@@ -21,8 +21,12 @@ public:
     
     template<class T>
     Cell(T&& value, DataType type) {
-        Cell temp(std::forward<T>(value));
+        Cell temp = construct_from(std::forward<T>(value));
         *this = temp.convert(type);
+    }
+
+    Cell(const Cell& other) {
+        data = other.data;
     }
     
     static DataType get_common_type(DataType left, DataType right);
@@ -89,7 +93,11 @@ private:
     }
     
     template<class T>
-    explicit Cell(T&& value) : data(std::forward<T>(value)) {}
+    static Cell construct_from(T&& value) {
+        Cell result;
+        result.data = std::move(value);
+        return result;
+    }
 
     Cell convert(DataType target_type) const;
     

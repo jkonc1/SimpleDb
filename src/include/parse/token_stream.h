@@ -3,6 +3,7 @@
 
 #include <string>
 #include <sstream>
+#include <optional>
 
 enum class TokenType {
     Identifier,
