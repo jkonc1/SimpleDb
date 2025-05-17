@@ -105,7 +105,6 @@ TableRow TableHeader::create_row(const std::map<std::string, std::string>& data)
 }
 
 TableRow join_rows(const TableRow& left, const TableRow& right){
-    // TODO: this is a bit weird with remade indexing, probably move to header
     std::vector<Cell> result_cells = left;
     result_cells.insert(result_cells.end(), right.begin(), right.end());
     return result_cells;
@@ -161,6 +160,11 @@ void Table::add_row(const std::map<std::string, std::string>& values){
 Table Table::cross_product(std::vector<std::pair<const Table&, std::string>> tables){
     assert(!tables.empty());
     
+    std::vector<std::shared_lock<std::shared_mutex>> locks;
+    for(auto& [table, alias] : tables){
+        locks.emplace_back(table.mutex);
+    }
+    
     TableHeader header = tables[0].first.header.add_alias(tables[0].second);
     std::vector<TableRow> rows = tables[0].first.rows;
     
@@ -196,16 +200,16 @@ const std::vector<ColumnDescriptor>& TableHeader::get_columns() const{
 
 
 void Table::filter_by_condition(TokenStream& stream, const VariableList& variables, 
-        std::function<Table(TokenStream&, const VariableList&)> select_callback) {
-            
-    auto lock = std::unique_lock(mutex);
+        std::function<Table(TokenStream&, const VariableList&)> select_callback, bool negate) {
             
     auto condition_result = evaluate_condition(stream, variables, select_callback);
+    
+    auto lock = std::unique_lock(mutex);
     
     std::vector<TableRow> new_rows;
     
     for(size_t i = 0; i < rows.size(); ++i){
-        if(condition_result[i]){
+        if(condition_result[i] != negate){
             new_rows.push_back(std::move(rows[i]));
         }
     }

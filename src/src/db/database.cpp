@@ -33,22 +33,27 @@ void Database::remove_table(const std::string& table_name){
     tables.erase(table_name);
 }
 
-std::string make_response(bool success, const std::string& message){
-    return std::string(success ? "OK" : "ERROR") + " " + message;
+std::string make_response(const std::string& status, const std::string& message){
+    return status + " " + message;
 }
 
 std::string Database::process_query(const std::string& query) noexcept{
-    bool success = true;
+    std::string status;
     std::string message;
     try {
         message = process_query_make_stream(query);
+        status = "OK";
+    }
+    catch (const InvalidQuery& e){
+        status = "ERR";
+        message = e.what();
     }
     catch (const std::exception& e) {
-        success = false;
+        status = "EXC";
         message = e.what();
     }
 
-    return make_response(success, message);
+    return make_response(status, message);
 }
 
 std::string Database::process_query_make_stream(const std::string& query){
@@ -194,6 +199,10 @@ std::string Database::process_insert(TokenStream& stream){
 
     std::map<std::string, std::string> column_value_map;
 
+    if(column_names.size() != values.size()){
+        throw InvalidQuery("Column name and value count mismatch");
+    }
+    
     for(size_t i = 0; i < column_names.size(); ++i){
         column_value_map[column_names[i]] = values[i].value;
     }
@@ -208,6 +217,10 @@ static std::vector<std::string> read_projection_list(TokenStream& stream){
 
     while(true){
         Token token = stream.get_token();
+        
+        if(token.type == TokenType::Empty){
+            throw InvalidQuery("No FROM statement found");
+        }
 
         if(token.like("FROM")){
             break;
@@ -220,7 +233,7 @@ static std::vector<std::string> read_projection_list(TokenStream& stream){
         if(!projection_expressions.back().empty()){
             projection_expressions.back() += " ";
         }
-        projection_expressions.back() += token.value;
+        projection_expressions.back() += token.get_raw();
     }
     
     return projection_expressions;
@@ -345,13 +358,13 @@ std::string Database::process_delete(TokenStream& stream){
 
     stream.ignore_token("FROM");
 
-    // TODO negate
-
     std::string table_name = stream.get_token(TokenType::Identifier);
 
     stream.ignore_token("WHERE");
 
-    get_table(table_name).filter_by_condition(stream, {}, select_callback);
+    get_table(table_name).filter_by_condition(stream, {}, select_callback, true);
+    
+    stream.ignore_token(";");
 
     return "Rows deleted from table " + table_name;
 };

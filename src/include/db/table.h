@@ -66,7 +66,7 @@ public:
     Table& operator=(Table&& other) noexcept;
     
     void filter_by_condition(TokenStream& stream, const VariableList& variables,
-        std::function<Table(TokenStream&, const VariableList&)> select_callback);
+        std::function<Table(TokenStream&, const VariableList&)> select_callback, bool negate = false);
     
     bool evaluate_aggregate_condition(TokenStream& stream, const VariableList& variables,
         std::function<Table(TokenStream&, const VariableList&)> select_callback) const;

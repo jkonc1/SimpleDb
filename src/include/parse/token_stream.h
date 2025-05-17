@@ -31,6 +31,13 @@ struct Token{
         }
         return true;
     }
+    
+    std::string get_raw() const{
+        if(type == TokenType::String){
+            return "\"" + value + "\"";
+        }
+        return value;
+    }
 };
 
 class TokenStream {

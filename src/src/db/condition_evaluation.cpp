@@ -204,6 +204,11 @@ BoolVector ConditionEvaluation::evaluate_condition_switch(CellVector expression)
 }
 
 BoolVector ConditionEvaluation::evaluate_primary_condition(){
+    if(stream.try_ignore_token("(")){
+        BoolVector result = evaluate();
+        stream.ignore_token(")");
+        return result;
+    }
     if(stream.try_ignore_token("EXISTS")){
         return evaluate_exists();
     }
@@ -244,7 +249,7 @@ BoolVector ConditionEvaluation::evaluate_disjunctive_condition(){
     auto result = evaluate_conjunctive_condition();
     
     while(stream.try_ignore_token("OR")){
-        auto right = evaluate_primary_condition();
+        auto right = evaluate_conjunctive_condition();
         
         result = result || right;
     }

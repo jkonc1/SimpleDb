@@ -112,23 +112,26 @@ std::unique_ptr<ExpressionNode> ExpressionEvaluation::parse_primary_expression()
         return parse_aggregate();
     }
     
-    if(next_token.type == TokenType::Identifier){
-        // column name
-        std::string column_name = stream.get_token(TokenType::Identifier);
+    if(next_token.type != TokenType::Identifier){
+        Token token = stream.get_token();
+        // just a constant
+        Cell value = parse_token_to_cell(token);
         
-        while(stream.try_ignore_token(".")){
-            column_name += "." + stream.get_token(TokenType::Identifier);
-        }
-        
-        return std::make_unique<VariableNode>(column_name);
+        return std::make_unique<ConstantNode>(value);
     }
     
-    Token token = stream.get_token();
-    // just a constant
-    Cell value = parse_token_to_cell(token);
+    if(next_token.like("NULL")){
+        stream.get_token();
+        return std::make_unique<ConstantNode>(Cell());
+    }
+    // column name
+    std::string column_name = stream.get_token(TokenType::Identifier);
     
-    return std::make_unique<ConstantNode>(value);
+    while(stream.try_ignore_token(".")){
+        column_name += "." + stream.get_token(TokenType::Identifier);
+    }
     
+    return std::make_unique<VariableNode>(column_name);
 }
 
 std::unique_ptr<ExpressionNode> ExpressionEvaluation::parse_multiplicative_expression() {
