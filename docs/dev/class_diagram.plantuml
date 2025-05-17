@@ -1,0 +1,244 @@
+@startuml
+!pragma layout elk
+' ===================================================================
+' == Core Database Layer ==
+' ===================================================================
+package DatabaseManager {
+  class DatabaseManager {
+    - path: Path
+    - database: Database
+    + DatabaseManager(path)
+    + load()
+    + save()
+    + is_loaded(): bool
+    + get(): Database&
+  }
+}
+
+
+' ===================================================================
+' == Engine ==
+' ===================================================================
+package Engine {
+
+  class Database {
+    - tables: map<string, Table>
+    + process_query(query: string): string noexcept
+    - evaluate_select(stream: TokenStream&, vars: VariableList): Table
+    + process_select(stream: TokenStream&): string
+    + process_insert(stream: TokenStream&): string
+    + process_delete(stream: TokenStream&): string
+    + process_create_table(stream: TokenStream&): string
+    + process_drop_table(stream: TokenStream&): string
+  }
+
+    class Table {
+      - header: TableHeader
+      - rows: vector<TableRow>
+      + Table(header: TableHeader)
+      + Table(columns: vector<pair<DataType,string>>)
+      + add_row(values: vector<string>)
+      + add_row(data: map<string,string>)
+      + filter_by_condition(...)
+      + evaluate_aggregate_condition(...): bool
+      + project(exprs: vector<string>, vars: VariableList): Table
+      + deduplicate()
+      + group_by(cols: vector<string>): vector<Table>
+      + vertical_join(other: Table)
+      + cross_product(tables: vector<pair<const Table&,string>>): static Table
+    }
+
+    class TableRow {
+      + values: vector<Cell>
+    }
+
+    class ExpressionEvaluation {
+      - table: Table
+      - stream: TokenStream&
+      - variables: VariableList
+      + ExpressionEvaluation(table, stream, variables)
+      + evaluate(): EvaluatedExpression
+    }
+
+    class ConditionEvaluation {
+      - table: Table
+      - stream: TokenStream&
+      - variables: VariableList
+      - select_callback: function<TokenStream&, VariableList -> Table>
+      + ConditionEvaluation(table, stream, variables, select_cb)
+      + evaluate(): BoolVector
+    }
+
+    Database --> "0..*" Table
+    Table --> TableHeader
+    Table --> "0..*" TableRow : has
+    TableHeader --> "0..*" ColumnDescriptor : has columns
+    TableRow --> Cell : consists of
+
+  class TableHeader {
+    - columns: vector<ColumnDescriptor>
+    + TableHeader(cols: vector<pair<DataType,string>>)
+    + get_columns(): vector<ColumnDescriptor>
+    + get_column_info(name: string): optional<ColumnDescriptor>
+    + create_row(data: map<string,string>): vector<Cell>
+    + add_alias(alias: string): TableHeader
+    + join(left: TableHeader, right: TableHeader): static TableHeader
+  }
+
+  class ColumnDescriptor {
+    + alias: string
+    + name: string
+    + type: Cell::DataType
+    + index: size_t
+  }
+
+  class Cell {
+    enum DataType { Null, String, Int, Float, Char }
+    - data: variant<monostate,int,float,char,string>
+    + Cell()
+    + Cell(T&& value, DataType type)
+    + type(): DataType
+    + repr(): optional<string>
+    + operator+(other: Cell): Cell
+    + operator-(other: Cell): Cell
+    + operator*(other: Cell): Cell
+    + operator/(other: Cell): Cell
+    + comparisons and assignment ops...
+  }
+
+  package ExpressionTree {
+    abstract class ExpressionNode {
+      + evaluate(row: VariableList): Cell
+      + get_type(row: VariableList): Cell::DataType
+    }
+
+    class VariableNode {
+      - name: string
+      + VariableNode(name: string)
+    }
+
+    class ConstantNode {
+      - value: Cell
+      + ConstantNode(value: Cell)
+    }
+
+    class BinaryOperationNode {
+      - left: unique_ptr<ExpressionNode>
+      - right: unique_ptr<ExpressionNode>
+      + BinaryOperationNode(l, r)
+    }
+
+    class AdditionNode {}
+    class SubtractionNode {}
+    class MultiplicationNode {}
+    class DivisionNode {}
+
+    ExpressionNode <|-- VariableNode
+    ExpressionNode <|-- ConstantNode
+    ExpressionNode <|-- BinaryOperationNode
+    BinaryOperationNode <|-- AdditionNode
+    BinaryOperationNode <|-- SubtractionNode
+    BinaryOperationNode <|-- MultiplicationNode
+    BinaryOperationNode <|-- DivisionNode
+  }
+
+  ExpressionEvaluation ..> ExpressionNode
+  ExpressionEvaluation .. Table
+  ExpressionEvaluation ..> TokenStream
+  ConditionEvaluation .. Table
+  ConditionEvaluation ..> TokenStream
+
+  struct BoundRow {
+    - header: TableHeader
+    - row: TableRow
+    + BoundRow(header, row)
+    + get_value(name: string): optional<pair<const Cell*, DataType>>
+  }
+
+  class VariableList {
+    - members: vector<BoundRow>
+    + VariableList()
+    + get_value(name: string): const Cell&
+    + get_type(name: string): DataType
+    + operator+(other: BoundRow): VariableList
+  }
+
+  VariableList --> "0..*" BoundRow
+  BoundRow --> TableHeader
+  BoundRow --> TableRow
+
+    struct Token {
+      + type: TokenType
+      + value: string
+      + operator==()
+      + like(what: string): bool
+      + get_raw(): string
+    }
+
+    class TokenStream {
+      - base_string: string
+      - stream: stringstream
+      + TokenStream(data: string)
+      + get_token(): Token
+      + peek_token(): Token
+      + ...
+      + empty(): bool
+      + assert_end()
+    }
+
+    TokenStream .. Token
+}
+
+' ===================================================================
+' == IO ==
+' ===================================================================
+package IO {
+  interface IPCConnection {
+    + send(message: string)
+    + receive(): string
+  }
+
+  interface IPCSocket {
+    + listen(callback: unique_ptr<IPCConnection>&&)
+    + stop()
+  }
+
+  class AsioUDSConnection {
+    - socket: asio::local::stream_protocol::socket
+  }
+
+  class AsioUDSSocket {
+    - path: string
+    + AsioUDSSocket(path: string)
+  }
+
+  class WindowsNamedPipeConnection {
+    - pipe: asio::windows::stream_handle
+    + WindowsNamedPipeConnection(pipe)
+  }
+
+  class WindowsNamedPipe {
+    - path: string
+    + WindowsNamedPipe(path: string)
+  }
+
+  IPCSocket <|.. AsioUDSSocket
+  IPCSocket <|.. WindowsNamedPipe
+  IPCConnection <|.. AsioUDSConnection
+  IPCConnection <|.. WindowsNamedPipeConnection
+}
+
+' ===================================================================
+' == JobQueue ==
+' ===================================================================
+package JobQueue {
+  class JobQueue {
+    - running_workers: queue<thread>
+    + JobQueue()
+    + add_job(task: move_only_function<void()>)
+    + finish()
+  }
+}
+DatabaseManager --> Database : owns
+@enduml
+
