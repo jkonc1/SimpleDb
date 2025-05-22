@@ -63,6 +63,7 @@ TEST_CASE("Cell comparisions"){
     CHECK((string < integer));
     
     CHECK((string == Cell(12, Int)));
+    CHECK(string == string);
     CHECK((character != integer));
     CHECK((real <= character));
     

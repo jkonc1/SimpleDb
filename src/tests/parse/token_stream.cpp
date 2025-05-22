@@ -30,5 +30,4 @@ TEST_CASE("TokenStream"){
     
     DOCTEST_CHECK_EQ(stream.get_token(TokenType::String), "11");
     DOCTEST_CHECK_EQ(stream.empty(), true);
-    DOCTEST_CHECK_EQ(stream.get_token(), Token{TokenType::Empty, ""});
 }

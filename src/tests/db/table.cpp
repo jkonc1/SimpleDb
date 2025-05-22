@@ -5,6 +5,7 @@
 #include <sstream>
 #include <vector>
 
+using enum Cell::DataType;
 
 const std::string serialized = 
 "Name,Age,Weight,Gender,\n"
@@ -14,10 +15,14 @@ const std::string serialized =
 "\\x,28,4,\\x,\n";
 
 TEST_CASE("Table") {
-    std::vector<std::string> names = {"Name", "Age", "Weight", "Gender"};
-    std::vector<Cell::DataType> types = {Cell::DataType::String, Cell::DataType::Int, Cell::DataType::Float, Cell::DataType::Char};
+    std::vector<std::pair<Cell::DataType, std::string>> columns = {
+        {String, "Name"},
+        {Int, "Age"},
+        {Float, "Weight"},
+        {Char, "Gender"}
+    };
     
-    Table table(names, types);
+    Table table(columns);
     
     std::map<std::string, std::string> row1 = {
         {"Name", "John"},
