@@ -193,7 +193,6 @@ private:
 
 template<>
 struct std::hash<Cell>{
-    /**
     size_t operator()(const Cell& cell){
         return std::hash<decltype(cell.data)>()(cell.data);
     }

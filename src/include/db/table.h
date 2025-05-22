@@ -139,9 +139,10 @@ public:
      * @brief Project the table through a set of expression
      * @param expressions The projection expression
      * @param variables Variable bindings for the evaluation
+     * @param aggregate_mode If true, treats expressions as aggregate functions (one row output)
      * @return New table with the projected columns
      */
-    Table project(const std::vector<std::string>& expressions, const VariableList& variables) const;
+    Table project(const std::vector<std::string>& expressions, const VariableList& variables, bool aggregate_mode = false) const;
     
     /**
      * @brief Remove duplicate rows from the table
@@ -177,6 +178,11 @@ public:
      * @brief Vertically join another table to this one
      */
     void vertical_join(const Table& other);
+    
+    /**
+     * @brief Copy the table
+     */
+    Table clone() const;
 private:
     TableHeader header;  
     std::vector<TableRow> rows;
@@ -189,11 +195,6 @@ private:
      * @brief Add a row to the table
      */
     void add_row(TableRow data);
-    
-    /**
-     * @brief Copy the table
-     */
-    Table clone() const;
     
     const std::vector<ColumnDescriptor>& get_columns() const;
     

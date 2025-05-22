@@ -26,7 +26,7 @@ private:
  */
 class VariableList{
 public:
-    /*    VariableList(){};
+    VariableList(){};
     
     /**
      * @brief Get a variable value by name
