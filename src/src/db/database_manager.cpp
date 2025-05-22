@@ -119,6 +119,11 @@ std::filesystem::path make_temp_dir() {
     return std::filesystem::temp_directory_path() / random_filename;
 }
 
+static void move_across_devices(const std::filesystem::path& from, const std::filesystem::path& to) {
+    std::filesystem::copy(from, to, std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing);
+    std::filesystem::remove_all(from);
+}
+
 void DatabaseManager::save() {
     if(!is_loaded()){
         throw std::runtime_error("Saving database failed - Database is not loaded");
@@ -143,8 +148,7 @@ void DatabaseManager::save() {
     check_directory(path);
     
     std::filesystem::remove_all(path);
-    // TODO change to move
-    std::filesystem::rename(temp_dir, path);
+    move_across_devices(temp_dir, path);
 }
 
 Database& DatabaseManager::get(){

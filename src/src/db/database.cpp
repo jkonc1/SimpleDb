@@ -270,17 +270,17 @@ std::vector<std::pair<const Table&, std::string>> Database::read_selected_tables
 
 std::vector<Table> Database::evaluate_select_group(TokenStream& stream, const VariableList& variables, Table& table){
     if(!stream.try_ignore_token("GROUP")){
-        return table.group_by({});
+        table.group_by({});
+        std::vector<Table> result;
+        result.push_back(table.clone());
+        return result;
     }
     
     stream.ignore_token("BY");
-    std::vector<Table> groups;
-
     std::vector<std::string> grouping_columns;
 
     while(true){
         std::string column_name = stream.get_token(TokenType::Identifier);
-
         grouping_columns.push_back(column_name);
 
         if(!stream.try_ignore_token(",")){
@@ -288,7 +288,7 @@ std::vector<Table> Database::evaluate_select_group(TokenStream& stream, const Va
         }
     }
 
-    groups=table.group_by(grouping_columns);
+    auto groups = table.group_by(grouping_columns);
 
     if(!stream.try_ignore_token("HAVING")){
         return groups;
@@ -300,7 +300,6 @@ std::vector<Table> Database::evaluate_select_group(TokenStream& stream, const Va
     }
 
     std::vector<Table> filtered_groups;
-    
     for(auto&& group : groups){
         TokenStream stream(having_condition);
 
@@ -326,13 +325,30 @@ Table Database::evaluate_select(TokenStream& stream, const VariableList& variabl
     if(stream.try_ignore_token("WHERE")){
         combined_table.filter_by_condition(stream, variables, select_callback);
     }
+    
+    bool is_aggregate = false;
+    for (const auto& expr : projection_expressions) {
+        if (expr.find("COUNT") != std::string::npos || 
+            expr.find("SUM") != std::string::npos ||
+            expr.find("AVG") != std::string::npos ||
+            expr.find("MIN") != std::string::npos ||
+            expr.find("MAX") != std::string::npos) {
+            is_aggregate = true;
+            break;
+        }
+    }
+    
+    if(stream.peek_token().like("GROUP")){
+        is_aggregate = true;
+    }
 
     std::vector<Table> groups = evaluate_select_group(stream, variables, combined_table);
-
+    
     Table result = combined_table.project(projection_expressions, variables);
-
-    for(const auto& group : groups){
-        result.vertical_join(group.project(projection_expressions, variables));
+    
+    for(auto&& group : groups) {
+        auto projected = group.project(projection_expressions, variables, is_aggregate);
+        result.vertical_join(projected);
     }
 
     if(distinct){
@@ -340,14 +356,13 @@ Table Database::evaluate_select(TokenStream& stream, const VariableList& variabl
     }
 
     return result;
-};
+}
 
 std::string Database::process_select(TokenStream& stream){
     Table table = evaluate_select(stream);
     stream.ignore_token(";");
 
     std::ostringstream response;
-
     serialize_table(table, response);
 
     return response.str();
@@ -355,16 +370,13 @@ std::string Database::process_select(TokenStream& stream){
 
 std::string Database::process_delete(TokenStream& stream){
     stream.ignore_token("DELETE");
-
     stream.ignore_token("FROM");
 
     std::string table_name = stream.get_token(TokenType::Identifier);
-
     stream.ignore_token("WHERE");
 
     get_table(table_name).filter_by_condition(stream, {}, select_callback, true);
-    
     stream.ignore_token(";");
 
     return "Rows deleted from table " + table_name;
-};
+}

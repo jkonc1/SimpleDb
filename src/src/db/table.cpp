@@ -313,15 +313,21 @@ void Table::vertical_join(const Table& other){
     rows.append_range(other.rows);
 }
 
-Table Table::project(const std::vector<std::string>& expressions, const VariableList& variables) const {
+Table Table::project(const std::vector<std::string>& expressions, const VariableList& variables, bool aggregate_mode) const {
     auto lock = std::shared_lock(mutex);
     
-    if(expressions == std::vector<std::string>{"*"}){
+    if(expressions == std::vector<std::string>{"*"} && !aggregate_mode){
         return clone();
     }
     
     std::vector<std::pair<Cell::DataType, std::string>> column_definitions;
-    std::vector<TableRow> new_table_rows(row_count());
+    std::vector<TableRow> new_table_rows;
+    
+    if (aggregate_mode) {
+        new_table_rows.resize(1);
+    } else {
+        new_table_rows.resize(row_count());
+    }
     
     for(auto&& expr : expressions){
         TokenStream stream(expr);
@@ -330,8 +336,20 @@ Table Table::project(const std::vector<std::string>& expressions, const Variable
         
         column_definitions.emplace_back(type, expr);
         
-        for(size_t index = 0; index < row_count(); index++){
-            new_table_rows[index].push_back(values[index]);
+        if (aggregate_mode) {
+            if (values.size() > 0) {
+                new_table_rows[0].push_back(values[0]);
+            } else {
+                if (expr.find("COUNT") != std::string::npos) {
+                    new_table_rows[0].push_back(Cell(0, Cell::DataType::Int));
+                } else {
+                    new_table_rows[0].push_back(Cell()); 
+                }
+            }
+        } else {
+            for(size_t index = 0; index < row_count(); index++){
+                new_table_rows[index].push_back(values[index]);
+            }
         }
     }
     
