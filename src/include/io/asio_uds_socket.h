@@ -9,13 +9,16 @@
 class AsioUDSSocket : public IPCSocket{
 public:
     AsioUDSSocket(const std::string& path);
+    
     virtual ~AsioUDSSocket();
     
     
     void listen(std::function<void(std::unique_ptr<IPCConnection>&&)> callback) override;
+    
     void stop() override;
 private:
     void start_accepting(std::function<void(std::unique_ptr<IPCConnection>&&)> callback);
+    
     std::string path;
     asio::io_context io;
     asio::local::stream_protocol::acceptor acceptor;
@@ -24,7 +27,9 @@ private:
 class AsioUDSConnection : public IPCConnection{
 public:
     AsioUDSConnection(asio::local::stream_protocol::socket&& socket);
+    
     void send(const std::string& message) override;
+    
     std::string receive() override;
 private:
     asio::local::stream_protocol::socket socket;

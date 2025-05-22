@@ -4,6 +4,10 @@
 #include <iostream>
 
 namespace logger{
+    /**
+     * @brief Log a message to standard output
+     * @details The parameters are printed separated by spaces
+     */
     template<class ... Args>
     void log(const Args&... args){
         ((std::cout << args << ' '), ...);
