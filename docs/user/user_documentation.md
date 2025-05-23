@@ -121,7 +121,13 @@ The types of values in `<column value>` shall match the types of their correspon
 #### SELECT
 The `SELECT` query is used extract values containing certain criteria from the database.
 
-Its syntax is complex and is described in [`select_syntax.md`](select_syntax.md).
+Syntax : `SELECT (* | <expression>,...) FROM <table name> <table alias>, ... [WHERE <search condition>] [GROUP BY <grouping column>, ... [ HAVING <search condition> ]];` 
+
+`<table name>` shall be the name of a table in the database.
+`<table alias>` is an optional alias for the table, it is used to disambiguate columns with the same name in different tables.
+If the alias is not provided, the table name is used as the alias.
+
+The syntax of `<search condition>` and `<expression>` is described in [`select_syntax.md`](select_syntax.md).
 
 The output of the query following the `OK` is as follows:
 - The first line is of format `(<column name>,)*` and describes the column names of the resulting table.
@@ -149,4 +155,4 @@ Syntax : `DELETE FROM <table name> [WHERE <search condition>];`
 `<table name>` is the name of a table. The syntax of `<search condition>` is described in [`select_syntax.md`](select_syntax.md).
 
 If the query is successful, rows satisfying `<search condition>` will be removed from the table.
-It the `WHERE` clause is not present, all rows of the table will be erased instead.
+If the `WHERE` clause is not present, all rows of the table will be erased instead.

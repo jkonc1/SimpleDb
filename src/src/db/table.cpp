@@ -343,7 +343,7 @@ Table Table::project(const std::vector<std::string>& expressions, const Variable
                 if (expr.find("COUNT") != std::string::npos) {
                     new_table_rows[0].push_back(Cell(0, Cell::DataType::Int));
                 } else {
-                    new_table_rows[0].push_back(Cell()); 
+                    new_table_rows[0].push_back(Cell());
                 }
             }
         } else {
@@ -365,4 +365,9 @@ Table Table::clone() const{
     result.rows = (std::vector<TableRow>)rows;
     
     return result;
+}
+
+void Table::clear_rows() {
+    auto lock = std::unique_lock(mutex);
+    rows.clear();
 }

@@ -183,6 +183,11 @@ public:
      * @brief Copy the table
      */
     Table clone() const;
+    
+    /**
+     * @brief Clear the table
+     */
+    void clear_rows();
 private:
     TableHeader header;  
     std::vector<TableRow> rows;
