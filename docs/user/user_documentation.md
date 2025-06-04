@@ -4,6 +4,7 @@ Dumbatase is a simple SQL engine supporting a subset of SQL.
 # Documentation
 ## System requirements
 This project supports Windows and Unix-based operating systems. 
+Besides this, there are no specific hardware requirements - requirements of these operating systems are sufficient for running the project.
 
 Building the software requires the MSVC compiler on Windows and either the GCC or clang on Unix-based systems.
 The compiler must support the C++23 standard.
@@ -23,6 +24,7 @@ or a free location, in which case a new database will be created there.
 
 `<io location>` shall be the path to the communication interface further described in **Interface**.
 
+After being started, the output of the program shall resemble [this screenshot](startup_screenshot.png).
 
 ## Interface
 After the program is started, a communication *interface* is opened at `<io location>`. This interface

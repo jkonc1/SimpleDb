@@ -16,8 +16,6 @@ using SocketInterface = WindowsNamedPipe;
 
 #endif
 
-#include <iostream>
-
 void process_connection(std::unique_ptr<IPCConnection> connection, Database& db) noexcept {
     std::string query;
     
@@ -41,7 +39,7 @@ void process_connection(std::unique_ptr<IPCConnection> connection, Database& db)
 }
 
 void show_usage() noexcept {
-    std::cerr << "Usage: Dumbatase <database_path> <socket_path>" << std::endl;
+    logger::log("Usage: Dumbatase <database_path> <socket_path>");
 }
 
 int main(int argc, char* argv[]){
@@ -59,9 +57,10 @@ int main(int argc, char* argv[]){
     
     try{
         db.load();
+        logger::log("Database loaded");
     }
     catch(const std::exception& e){
-        logger::log("Failed to load database: " + std::string(e.what()));
+        logger::log("Failed to load database: ", std::string(e.what()));
         return 1;
     }
     
@@ -71,9 +70,10 @@ int main(int argc, char* argv[]){
     
     try{
         socket = std::make_unique<SocketInterface>(std::string(socket_path));
+        logger::log("Created socket");
     }
     catch(const std::exception& e){
-        std::cerr << "Error creating socket: " << e.what() << std::endl;
+        logger::log("Error creating socket: ", e.what());
         return 1;
     }
     
@@ -90,10 +90,10 @@ int main(int argc, char* argv[]){
         socket->stop();
     });
 
-    std::cout << "Started" << std::endl;
+    logger::log("Started");
     
     try{
-    socket->listen(callback);
+        socket->listen(callback);
     }
     catch(const std::exception& e){
         logger::log("Failed to bind to socket: " + std::string(e.what()));
