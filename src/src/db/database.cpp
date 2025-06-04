@@ -8,6 +8,12 @@
 
 #include <mutex>
 
+Database::Database(std::vector<std::pair<Table, std::string>> table_list){
+    for(auto&& [table, name] : table_list){
+        add_table(name, std::move(table));
+    }
+}
+
 void Database::add_table(const std::string& table_name, Table table){
     if(tables.contains(table_name)){
         throw std::runtime_error("Table " + table_name + " already exists");

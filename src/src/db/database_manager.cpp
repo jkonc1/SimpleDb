@@ -40,7 +40,7 @@ void DatabaseManager::load(){
     check_directory(path);
     lock_directory(path);
     
-    database = std::make_unique<Database>();
+    std::vector<std::pair<Table, std::string>> tables;
     
     for(const auto& entry : std::filesystem::directory_iterator(path)){
         const std::filesystem::path& filename = entry.path();
@@ -57,21 +57,20 @@ void DatabaseManager::load(){
             file.open(filename);
         }
         catch(std::exception& e){
-            database.reset();
             throw std::runtime_error("Failed to open table " + filename.string() + " - " + std::string(e.what()));
         }
         
         try{
-            database->add_table(table_name, load_table(file));
+            tables.emplace_back(load_table(file), table_name);
         }catch(ParsingError& e){
-            database.reset();
             throw std::runtime_error("Failed to parse table " + filename.string() + " - " + std::string(e.what()));
         }
         catch(std::exception& e){
-            database.reset();
             throw std::runtime_error("Failed to load table " + filename.string() + " - " + std::string(e.what()));
         }
     }
+    
+    database = std::make_unique<Database>(std::move(tables));
 }
 
 void DatabaseManager::check_directory(const std::filesystem::path& path){
@@ -129,16 +128,13 @@ void DatabaseManager::save() {
         throw std::runtime_error("Saving database failed - Database is not loaded");
     }
     
-    // We can't have anything changing while saving
-    auto lock = std::unique_lock(database->tables_lock);
-    
     // First dump to a temp directory and then move it
     
     std::filesystem::path temp_dir = make_temp_dir();
     
     init_directory(temp_dir);
     
-    for(const auto& [table_name, table] : database->tables){
+    for(const auto& [table_name, table] : database->get_tables()){
         std::ofstream file(temp_dir/table_name);
         
         serialize_table(table, file);

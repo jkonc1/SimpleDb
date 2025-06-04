@@ -21,7 +21,7 @@ BoolVector ConditionEvaluation::evaluate_exists(){
     auto select_result = process_select();
     
     BoolVector result = apply_condition([](const Table& table){
-        return table.row_count() > 0;
+        return table.get_rows().size() > 0;
     }, select_result);
     
     stream.ignore_token(")");
@@ -301,8 +301,8 @@ std::vector<Table> ConditionEvaluation::process_select(){
     
     std::vector<Table> result;
     
-    for(auto&& row : table.rows){
-        BoundRow bound(table.header, row);
+    for(auto&& row : table.get_rows()){
+        BoundRow bound(table.get_header(), row);
         
         result.push_back(process_select_single_row(select_text, bound));
     }
@@ -314,11 +314,11 @@ const Cell& ConditionEvaluation::extract_single_cell(const Table& table){
     if(table.get_columns().size() != 1){
         throw InvalidQuery("Subquery table must have 1 column");
     }
-    if(table.row_count() != 1){
+    if(table.get_rows().size() != 1){
         throw InvalidQuery("Subquery table must have 1 row");
     }
     
-    return table.rows[0][0];
+    return table.get_rows()[0][0];
 }
 
 std::vector<Cell> ConditionEvaluation::extract_vector(const Table& table){
@@ -328,7 +328,7 @@ std::vector<Cell> ConditionEvaluation::extract_vector(const Table& table){
     
     std::vector<Cell> result;
     
-    for(auto&& row : table.rows){
+    for(auto&& row : table.get_rows()){
         result.push_back(row[0]);
     }
     

@@ -28,7 +28,7 @@ std::unique_ptr<ExpressionNode> ExpressionEvaluation::parse_count() {
     
     if(stream.try_ignore_token("*")){
         stream.ignore_token(")");
-        return std::make_unique<ConstantNode>(Cell((int)table.row_count(), Cell::DataType::Int));
+        return std::make_unique<ConstantNode>(Cell((int)table.get_rows().size(), Cell::DataType::Int));
     }
     
     bool distinct = stream.try_ignore_token("DISTINCT");
@@ -36,7 +36,7 @@ std::unique_ptr<ExpressionNode> ExpressionEvaluation::parse_count() {
     std::string column = stream.get_token(TokenType::Identifier);
     stream.ignore_token(")");
     
-    auto descriptor = table.header.get_column_info(column);
+    auto descriptor = table.get_header().get_column_info(column);
     if(!descriptor.has_value()){
         throw InvalidQuery("Unknown column " + column);
     }
@@ -44,7 +44,7 @@ std::unique_ptr<ExpressionNode> ExpressionEvaluation::parse_count() {
     
     std::vector<Cell> cells_in_column;
     
-    for(auto&& row : table.rows){
+    for(auto&& row : table.get_rows()){
         if(row[column_index].type() != Cell::DataType::Null){
             cells_in_column.push_back(row[column_index]);
         }
@@ -187,18 +187,18 @@ std::unique_ptr<ExpressionNode> ExpressionEvaluation::parse_additive_expression(
 EvaluatedExpression ExpressionEvaluation::evaluate() {
     auto tree = parse_additive_expression();
     
-    CellVector result(table.rows.size());
-    for(size_t row_index = 0; row_index < table.rows.size(); ++row_index){
-        const TableRow& row = table.rows[row_index];
+    CellVector result(table.get_rows().size());
+    for(size_t row_index = 0; row_index < table.get_rows().size(); ++row_index){
+        const TableRow& row = table.get_rows()[row_index];
         
-        BoundRow row_ref(table.header, row);
+        BoundRow row_ref(table.get_header(), row);
         
         auto new_variables = variables + row_ref;
         
         result[row_index] = tree->evaluate(new_variables);
     }
     
-    BoundRow dummy_row(table.header, TableRow(table.header.column_count()));
+    BoundRow dummy_row(table.get_header(), TableRow(table.get_header().column_count()));
     auto type = tree->get_type(variables + dummy_row);
     
     return {type, std::move(result)};

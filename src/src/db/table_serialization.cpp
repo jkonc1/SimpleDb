@@ -126,7 +126,7 @@ void serialize_table(const Table& table, std::ostream& os) {
     result.push_back(names_row);
     result.push_back(types_row);
     
-    for(auto&& row : table.rows){
+    for(auto&& row : table.get_rows()){
         result.push_back(dump_row(row));
     }
     

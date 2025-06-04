@@ -11,12 +11,32 @@
 
 class Database {
 public:
+    /*
+     * @brief Construct an empty database
+     */
+    Database() = default;
+    
+    /*
+     * @brief Construct a database from a list of tables
+     * @params Pairs of (table, table name)
+     */
+    Database(std::vector<std::pair<Table, std::string>> table_list);
+    
     /**
      * @brief Process an SQL query and return the response
      * @param query The SQL query to process
      * @return The response
      */
     std::string process_query(const std::string& query) noexcept;
+    
+    class Accessor{
+    private:
+        Accessor() = default;
+        friend class DatabaseManager;
+        friend class Database;
+    };
+    
+    const std::map<std::string, Table>& get_tables([[maybe_unused]] Accessor accessor = Accessor()) const {return tables;}
     
 private:
     /**
@@ -118,8 +138,6 @@ private:
      * @details Protects the structure of the tables map but not the tables themselves
      */
     mutable std::shared_mutex tables_lock;
-    
-    friend class DatabaseManager;
 };
 
 #endif

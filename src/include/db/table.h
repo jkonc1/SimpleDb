@@ -188,6 +188,35 @@ public:
      * @brief Clear the table
      */
     void clear_rows();
+    
+    /*
+     * @brief A type for limiting method access to only some clases
+     */
+    class Accessor{
+    private:
+        Accessor() = default;
+        
+        friend class ConditionEvaluation;
+        friend class ExpressionEvaluation;
+        friend class Table;
+        friend void serialize_table(const Table& table, std::ostream& os);
+    };
+    
+    const std::vector<ColumnDescriptor>& get_columns(Accessor accessor = Accessor()) const;
+    
+    /**
+     * @brief Evaluate an expression on the table
+     */
+    EvaluatedExpression evaluate_expression(TokenStream& stream, const VariableList& variables, Accessor accessor = Accessor()) const;
+    
+    /**
+     * @brief Evaluate a condition on the table
+     */
+    BoolVector evaluate_condition(TokenStream& stream, const VariableList& variables,
+        std::function<Table(TokenStream&, const VariableList&)> select_callback, Accessor accessor = Accessor()) const;
+    
+    const std::vector<TableRow>& get_rows([[maybe_unused]] Accessor accessor = Accessor()) const {return rows;};
+    const TableHeader& get_header([[maybe_unused]] Accessor accessor = Accessor()) const {return header;};
 private:
     TableHeader header;  
     std::vector<TableRow> rows;
@@ -201,25 +230,8 @@ private:
      */
     void add_row(TableRow data);
     
-    const std::vector<ColumnDescriptor>& get_columns() const;
-    
-    /**
-     * @brief Evaluate an expression on the table
-     */
-    EvaluatedExpression evaluate_expression(TokenStream& stream, const VariableList& variables) const;
-    
-    /**
-     * @brief Evaluate a condition on the table
-     */
-    BoolVector evaluate_condition(TokenStream& stream, const VariableList& variables,
-        std::function<Table(TokenStream&, const VariableList&)> select_callback) const;
-    
     mutable std::shared_mutex mutex;
     
-    friend void serialize_table(const Table& table, std::ostream& os);
-    
-    friend class ConditionEvaluation;
-    friend class ExpressionEvaluation;
 };
 
 #endif

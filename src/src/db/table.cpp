@@ -190,7 +190,7 @@ Table Table::cross_product(std::vector<std::pair<const Table&, std::string>> tab
     return result;
 }
 
-const std::vector<ColumnDescriptor>& Table::get_columns() const{
+const std::vector<ColumnDescriptor>& Table::get_columns([[maybe_unused]] Accessor accessor) const{
     return header.get_columns();
 }
 
@@ -257,13 +257,13 @@ std::vector<Table> Table::group_by(const std::vector<std::string>& grouping_colu
 }
 
 BoolVector Table::evaluate_condition(TokenStream& stream, const VariableList& variables, 
-        std::function<Table(TokenStream&, const VariableList&)> select_callback) const {
+        std::function<Table(TokenStream&, const VariableList&)> select_callback,[[maybe_unused]] Accessor accessor) const {
     
     ConditionEvaluation evaluation(*this, stream, variables, select_callback);
     return  evaluation.evaluate();
 }
 
-EvaluatedExpression Table::evaluate_expression(TokenStream& stream, const VariableList& variables) const {
+EvaluatedExpression Table::evaluate_expression(TokenStream& stream, const VariableList& variables, [[maybe_unused]] Accessor accessor) const {
     ExpressionEvaluation expr(*this, stream, variables);
     
     return expr.evaluate();
