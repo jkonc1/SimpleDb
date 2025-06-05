@@ -5,7 +5,7 @@
 std::vector<Token> read_array(TokenStream& stream){
     std::vector<Token> result;
     
-    if(stream.peek_token().value == ")"){
+    if(stream.peek_token().get_value() == ")"){
         return result;
     }
     
@@ -13,7 +13,7 @@ std::vector<Token> read_array(TokenStream& stream){
         auto value = stream.get_token();
         result.push_back(value);
         
-        if(stream.peek_token().value == ")"){
+        if(stream.peek_token().get_value() == ")"){
             break;
         }
         

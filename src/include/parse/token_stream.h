@@ -13,9 +13,17 @@ enum class TokenType {
     Empty      
 };
 
-struct Token{
-    TokenType type;   
-    std::string value;
+class Token{
+public:
+    Token(TokenType type, std::string value) : type(type), value(value){}
+    
+    TokenType get_type() const {
+        return type;
+    }
+    
+    const std::string& get_value() const {
+        return value;
+    }
     
     bool operator==(const Token& other) const {
         return type == other.type && value == other.value;
@@ -45,6 +53,10 @@ struct Token{
         }
         return value;
     }
+    
+private:
+    TokenType type;   
+    std::string value;
 };
 
 /**

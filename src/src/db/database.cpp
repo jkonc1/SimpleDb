@@ -172,10 +172,10 @@ std::string Database::process_insert(TokenStream& stream){
         auto column_name_tokens = read_array(stream);
 
         for(const auto& token : column_name_tokens){
-            if(token.type != TokenType::Identifier){
+            if(token.get_type() != TokenType::Identifier){
                 throw InvalidQuery("Invalid column name");
             }
-            column_names.push_back(token.value);
+            column_names.push_back(token.get_value());
         }
 
         stream.ignore_token(")");
@@ -196,7 +196,7 @@ std::string Database::process_insert(TokenStream& stream){
     if(all_columns){
         std::vector<std::string> value_strings;
         for(auto&& value : values){
-            value_strings.push_back(std::move(value.value));
+            value_strings.push_back(std::move(value.get_value()));
         }
         table.add_row(value_strings);
         
@@ -210,7 +210,7 @@ std::string Database::process_insert(TokenStream& stream){
     }
     
     for(size_t i = 0; i < column_names.size(); ++i){
-        column_value_map[column_names[i]] = values[i].value;
+        column_value_map[column_names[i]] = values[i].get_value();
     }
 
     table.add_row(column_value_map);
@@ -224,7 +224,7 @@ static std::vector<std::string> read_projection_list(TokenStream& stream){
     while(true){
         Token token = stream.get_token();
         
-        if(token.type == TokenType::Empty){
+        if(token.get_type() == TokenType::Empty){
             throw InvalidQuery("No FROM statement found");
         }
 
@@ -255,8 +255,8 @@ std::vector<std::pair<const Table&, std::string>> Database::read_selected_tables
 
         std::string alias;
 
-        if(next_token.type == TokenType::Identifier && !is_keyword(next_token.value)){
-            alias = stream.get_token().value;
+        if(next_token.get_type() == TokenType::Identifier && !is_keyword(next_token.get_value())){
+            alias = stream.get_token().get_value();
         }
         else{
             alias = table_name;
@@ -301,7 +301,7 @@ std::vector<Table> Database::evaluate_select_group(TokenStream& stream, const Va
     
     std::string having_condition;
     while(!stream.peek_token().like(";") && !stream.empty()){
-        having_condition += stream.get_token().value + " ";
+        having_condition += stream.get_token().get_value() + " ";
     }
 
     std::vector<Table> filtered_groups;

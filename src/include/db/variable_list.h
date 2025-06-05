@@ -6,7 +6,8 @@
 /**
  * @brief A row combined with the header for variable access
  */
-struct BoundRow {
+class BoundRow {
+public:
     BoundRow(const TableHeader& header, const TableRow& row);
     
     /**

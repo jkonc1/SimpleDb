@@ -122,11 +122,11 @@ ConditionEvaluation::Comparator<Cell> ConditionEvaluation::operator_token_to_com
         {"<>", std::not_equal_to<Cell>()}
     };
     
-    if(!operator_to_comparator.contains(token.value)){
-        throw InvalidQuery("Invalid operator " + token.value);
+    if(!operator_to_comparator.contains(token.get_value())){
+        throw InvalidQuery("Invalid operator " + token.get_value());
     }
     
-    return operator_to_comparator.at(token.value);
+    return operator_to_comparator.at(token.get_value());
 }
 
 BoolVector ConditionEvaluation::evaluate_compare_subquery(CellVector expression, Comparator<Cell> comparator, bool has_any, bool has_all){
@@ -280,7 +280,7 @@ static std::string get_inside_brackets(TokenStream& stream){
             break;
         }
         
-        result += next.value + " ";
+        result += next.get_value() + " ";
         stream.get_token();
     }
     

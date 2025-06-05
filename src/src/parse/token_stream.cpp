@@ -16,7 +16,7 @@ void TokenStream::ignore_whitespace() {
 }
 
 bool TokenStream::empty() {
-    return peek_token().type == TokenType::Empty;
+    return peek_token().get_type() == TokenType::Empty;
 }
 
 char TokenStream::get() {
@@ -80,10 +80,10 @@ const Token& TokenStream::peek_token() {
 
 const std::string& TokenStream::peek_token(TokenType type) {
     const Token& res = peek_token();
-    if(res.type != type){
-        throw InvalidQuery("Invalid token : " + res.value);
+    if(res.get_type() != type){
+        throw InvalidQuery("Invalid token : " + res.get_value());
     }
-    return res.value;
+    return res.get_value();
 }
 
 Token TokenStream::get_token() {
@@ -96,10 +96,10 @@ Token TokenStream::get_token() {
 
 std::string TokenStream::get_token(TokenType type){
     Token token = peek_token();
-    if(token.type != type){
-        throw InvalidQuery("Invalid token : " + token.value);
+    if(token.get_type() != type){
+        throw InvalidQuery("Invalid token : " + token.get_value());
     }
-    return get_token().value;
+    return get_token().get_value();
 }
 
 Token TokenStream::get_number() {
@@ -154,7 +154,7 @@ void TokenStream::ignore_token(const Token& token) {
     Token next = peek_token();
     
     if(token != next){
-        throw InvalidQuery("Expected token " + token.value + ", got " + next.value);
+        throw InvalidQuery("Expected token " + token.get_value() + ", got " + next.get_value());
     }
     
     get_token();
@@ -164,7 +164,7 @@ void TokenStream::ignore_token(const std::string& token) {
     Token next = peek_token();
     
     if(!next.like(token)){
-        throw InvalidQuery("Expected token " + token + ", got " + next.value);
+        throw InvalidQuery("Expected token " + token + ", got " + next.get_value());
     }
     
     get_token();
@@ -194,6 +194,6 @@ bool TokenStream::try_ignore_token(const std::string& token) {
 
 void TokenStream::assert_end() {
     if(!empty()){
-        throw InvalidQuery("Expected end of input, got " + peek_token().value);
+        throw InvalidQuery("Expected end of input, got " + peek_token().get_value());
     }
 }

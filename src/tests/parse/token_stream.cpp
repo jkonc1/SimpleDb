@@ -16,7 +16,7 @@ TEST_CASE("TokenStream"){
     DOCTEST_CHECK_EQ(stream.get_token(TokenType::Identifier), "Name");
     DOCTEST_CHECK_EQ(stream.get_token(TokenType::SpecialChar), "=");
     
-    DOCTEST_CHECK_EQ(stream.peek_token().value, "Peter Bucman");
+    DOCTEST_CHECK_EQ(stream.peek_token().get_value(), "Peter Bucman");
     
     DOCTEST_CHECK_THROWS_AS(stream.ignore_token("="), InvalidQuery);
     

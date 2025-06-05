@@ -113,7 +113,7 @@ std::unique_ptr<ExpressionNode> ExpressionEvaluation::parse_primary_expression()
         return parse_aggregate();
     }
     
-    if(next_token.type != TokenType::Identifier){
+    if(next_token.get_type() != TokenType::Identifier){
         Token token = stream.get_token();
         // just a constant
         Cell value = parse_token_to_cell(token);
@@ -141,7 +141,7 @@ std::unique_ptr<ExpressionNode> ExpressionEvaluation::parse_multiplicative_expre
     while(true){
         auto next_token = stream.peek_token();
         
-        if(next_token.value != "*" && next_token.value != "/"){
+        if(next_token.get_value() != "*" && next_token.get_value() != "/"){
             break;
         }
         
@@ -149,7 +149,7 @@ std::unique_ptr<ExpressionNode> ExpressionEvaluation::parse_multiplicative_expre
         
         auto next_expression = parse_primary_expression();
         
-        if(next_token.value == "*"){
+        if(next_token.get_value() == "*"){
             result = std::make_unique<MultiplicationNode>(std::move(result), std::move(next_expression));
         } else {
             result = std::make_unique<DivisionNode>(std::move(result), std::move(next_expression));
@@ -166,7 +166,7 @@ std::unique_ptr<ExpressionNode> ExpressionEvaluation::parse_additive_expression(
     while(true){
         auto next_token = stream.peek_token();
         
-        if(next_token.value != "-" && next_token.value != "+"){
+        if(next_token.get_value() != "-" && next_token.get_value() != "+"){
             break;
         }
         
@@ -174,7 +174,7 @@ std::unique_ptr<ExpressionNode> ExpressionEvaluation::parse_additive_expression(
         
         auto next_expression = parse_multiplicative_expression();
         
-        if(next_token.value == "-"){
+        if(next_token.get_value() == "-"){
             result = std::make_unique<SubtractionNode>(std::move(result), std::move(next_expression));
         } else {
             result = std::make_unique<AdditionNode>(std::move(result), std::move(next_expression));
